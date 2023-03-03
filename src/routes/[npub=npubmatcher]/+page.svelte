@@ -271,10 +271,15 @@
 		}
 		lastPubKey = pubkey;
 		window.history.pushState(pubkey, pubkey, `/${npubEncode(pubkey)}`);
+		if (relayPool) {
+			relayPool.close();
+			relayPool = new RelayPool(null, { logSubscriptions: true });
+		}
 
 		const start = performance.now();
 		const info0 = await fetchInfo(server, pubkey);
 		info.set(info0);
+		window.scrollTo(0, 0);
 		metadataByPubkey.set(pubkey, info0.metadata);
 		console.log(info0);
 		relays = writeRelaysForContactList(info0.contacts);
@@ -299,6 +304,9 @@
 			[{ authors: [info0.metadata.pubkey], kinds: [1], limit: 100 }],
 			relays,
 			async (event, afterEose, url) => {
+				if (pubkey != lastPubKey) {
+					return;
+				}
 				num_events++;
 				if (num_events % 50 == 0) {
 					console.log(
@@ -340,6 +348,9 @@
 						(await showNote(event)) +
 						'</span>';
 					Promise.all(ppromises).then(() => {
+						if (pubkey != lastPubKey) {
+							return;
+						}
 						let newRelays: string[] = [];
 						for (const p of ps) {
 							const r = writeRelaysByPubkey.get(p);
@@ -351,6 +362,9 @@
 							[{ ids: es, kinds: [1] }],
 							newRelays,
 							(event2) => {
+								if (pubkey != lastPubKey) {
+									return;
+								}
 								num_event2s++;
 								if (num_event2s % 100 == 0) {
 									console.log(
@@ -398,7 +412,7 @@
 	let metadataContent: MetadataContent;
 	$: metadataContent = parseJSON($info?.metadata?.content);
 	$: console.log(metadataContent);
-	const relayPool: RelayPool = new RelayPool(null, { logSubscriptions: true });
+	let relayPool: RelayPool = new RelayPool(null, { logSubscriptions: true });
 </script>
 
 {#if metadataContent}
