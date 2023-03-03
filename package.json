@@ -31,5 +31,11 @@
 		"vite": "^4.0.0",
 		"vitest": "^0.25.3"
 	},
-	"type": "module"
+	"type": "module",
+	"dependencies": {
+		"javascript-time-ago": "^2.5.9",
+		"nostr-relaypool": "^0.5.3",
+		"nostr-tools": "^1.7.1",
+		"ws": "^8.12.1"
+	}
 }

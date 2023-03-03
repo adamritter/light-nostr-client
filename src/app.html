@@ -5,8 +5,53 @@
 		<link rel="icon" href="%sveltekit.assets%/favicon.png" />
 		<meta name="viewport" content="width=device-width" />
 		%sveltekit.head%
+		<title>rbr.bio</title>
+		<style>body {background-color: #121212; color: white;}</style>
+		<style>a {color: #1d9bf0; text-decoration: none;}</style>
+		<meta name="viewport" content="width=device-width, initial-scale=1">
 	</head>
 	<body data-sveltekit-preload-data="hover">
+
+<a href='/'>Home</a>
+<input type='text' name='q' id='q' placeholder='Search' autocomplete='off' style='width: 100%; max-width: 400px'
+ oninput='search(this.value.toLowerCase())'
+ onchange='search(this.value.toLowerCase())' /><br>
+    <span id='search-results' style='border-left: 40px'></span>
+<script>
+let lastsearch=""
+function search(q) {
+  if (q!=lastsearch) {
+    lastsearch=q
+    let el = document.getElementById('search-results');
+    el.innerHTML = '';
+    if (q.startsWith('npub') && q.length === 63) {
+      window.location.href = '/' + q;
+    }
+    if (q.length === 64 && /^[0-9a-fA-F]+$/.test(q)) {
+      window.location.href = '/' + q.toLowerCase();
+    }
+    if (q == "") {
+      return
+    }
+    // fetch data
+    fetch('https://rbr.bio/search/' + q + '.json').then((r) => r.json()).then((r) => {
+      if (el && q == document.getElementById('q').value.toLowerCase()) {
+        el.innerHTML = '';
+        for (let i = 0; i < r.length; i++) {
+          let data = r[i]
+          let followerCount = data[0]
+          let metaData = data[1]
+          let content = JSON.parse(metaData.content)
+          let name = content.name
+          let displayName = content.display_name
+          el.innerHTML += `<a href="javascript:void(0)" onclick="load('` + data[1].pubkey + `')">` + (displayName || name) + '(' + followerCount + ') @'+ name + '</a> <br>'
+        }
+      }
+    })
+  }
+}
+</script><br>
+
 		<div style="display: contents">%sveltekit.body%</div>
 	</body>
 </html>
