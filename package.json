@@ -34,7 +34,7 @@
 	"type": "module",
 	"dependencies": {
 		"javascript-time-ago": "^2.5.9",
-		"nostr-relaypool": "^0.5.3",
+		"nostr-relaypool": "^0.5.5",
 		"nostr-tools": "^1.7.1",
 		"ws": "^8.12.1"
 	}

@@ -446,7 +446,7 @@
 				{metadataContent.about}<br /><br />
 			{/if}
 			{#if metadataContent.website}
-				{metadataContent.website}<br /><br />
+				<a href={metadataContent.website}>{metadataContent.website}</a><br /><br />
 			{/if}
 
 			<a href="/{npubEncode(lastPubKey)}/followers">{$info?.followerCount || 0} followers</a><br
