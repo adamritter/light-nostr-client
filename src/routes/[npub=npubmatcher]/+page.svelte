@@ -460,7 +460,10 @@
 	</span>
 {/if}
 
-<span style="display: flex; justify-content: flex-start; max-width: 100%; overflow: hidden">
+<span
+	id="eventsandinfo"
+	style="display: flex; justify-content: flex-start; max-width: 100%; overflow: hidden"
+>
 	<div
 		id="events"
 		style="flex-grow: 4; display: flex; flex-direction: column; max-width: 70%; overflow: hidden"
@@ -477,3 +480,17 @@
 		{/if}
 	</span>
 </span>
+
+<style>
+	@media (max-width: 600px) {
+		#eventsandinfo {
+			flex-direction: column;
+		}
+		#events {
+			max-width: 100% !important;
+		}
+		#info {
+			max-width: 100% !important;
+		}
+	}
+</style>
