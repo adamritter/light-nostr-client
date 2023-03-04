@@ -301,7 +301,7 @@
 		const metadataContent = parseJSON(info0.metadata.content);
 		metadataContent.followerCount = info0.followerCount;
 		relayPool.subscribe(
-			[{ authors: [info0.metadata.pubkey], kinds: [1], limit: 100 }],
+			[{ authors: [info0.metadata.pubkey], kinds: [1], limit: 50 }],
 			relays,
 			async (event, afterEose, url) => {
 				if (pubkey != lastPubKey) {
