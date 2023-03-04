@@ -461,7 +461,10 @@
 {/if}
 
 <span style="display: flex; justify-content: flex-start; max-width: 100%; overflow: hidden">
-	<div id="events" style="flex-grow: 4; display: flex; flex-direction: column; max-width: 70%" />
+	<div
+		id="events"
+		style="flex-grow: 4; display: flex; flex-direction: column; max-width: 70%; overflow: hidden"
+	/>
 	<span id="info" style="flex-grow: 1; max-width: 30%">
 		{#if $info}
 			{#if $info.following}
