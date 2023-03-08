@@ -26,8 +26,13 @@
 	const metadataByPubkey = new Map<string, Event>();
 	const metadataPromisesByPubkey = new Map<string, Promise<Event>>();
 
-	const writeRelaysByPubkey = new Map<string, string[]>();
-	const writeRelaysPromisesByPubkey = new Map<string, Promise<string[]>>();
+	async function fetchJSON(url: string) {
+		return fetch(url)
+			.then((response) => response.json())
+			.catch((e) => {
+				throw new Error('error fetching ' + url + ' ' + e);
+			});
+	}
 
 	function npubEncode(pubkey: string) {
 		try {
@@ -46,15 +51,6 @@
 			throw new Error('invalid npub' + npub + e);
 		}
 	}
-	// fetch info.json
-	async function fetchJSON(url: string) {
-		return fetch(url)
-			.then((response) => response.json())
-			.catch((e) => {
-				throw new Error('error fetching ' + url + ' ' + e);
-			});
-	}
-
 	async function fetchInfo(server: string, pubkey: string) {
 		const url = `${server}/${pubkey}/info.json`;
 		return fetchJSON(url);
@@ -241,27 +237,6 @@
 		return r;
 	}
 
-	function fetchWriteRelays(server: string, pubkey: string) {
-		const url = `${server}/${pubkey}/writerelays.json`;
-		return fetchJSON(url);
-	}
-
-	function fetchAndCacheWriteRelays(server: string, pubkey: string) {
-		if (writeRelaysByPubkey.has(pubkey)) {
-			return Promise.resolve(writeRelaysByPubkey.get(pubkey));
-		}
-		if (writeRelaysPromisesByPubkey.has(pubkey)) {
-			return writeRelaysPromisesByPubkey.get(pubkey);
-		}
-		let r = fetchWriteRelays(server, pubkey);
-		r.then((x) => {
-			// @ts-ignore
-			writeRelaysByPubkey.set(pubkey, x);
-			// console.log('write relays for ', pubkey, x);
-		});
-		writeRelaysPromisesByPubkey.set(pubkey, r);
-		return r;
-	}
 	const server = 'https://rbr.bio';
 	let lastPubKey: string;
 
@@ -273,7 +248,7 @@
 		window.history.pushState(pubkey, pubkey, `/${npubEncode(pubkey)}`);
 		if (relayPool) {
 			relayPool.close();
-			relayPool = new RelayPool(null, { logSubscriptions: true });
+			relayPool = new RelayPool(undefined, { logSubscriptions: true });
 		}
 
 		const start = performance.now();
@@ -283,6 +258,7 @@
 		metadataByPubkey.set(pubkey, info0.metadata);
 		console.log(info0);
 		relays = writeRelaysForContactList(info0.contacts);
+		relayPool.setWriteRelaysForPubKey(pubkey, relays);
 		let e = document?.getElementById?.('events');
 		if (e) {
 			e.innerHTML = '';
@@ -302,7 +278,7 @@
 		metadataContent.followerCount = info0.followerCount;
 		relayPool.subscribe(
 			[{ authors: [info0.metadata.pubkey], kinds: [1], limit: 50 }],
-			relays,
+			undefined,
 			async (event, afterEose, url) => {
 				if (pubkey != lastPubKey) {
 					return;
@@ -318,9 +294,6 @@
 					);
 				}
 				const start2 = performance.now();
-				let ppromises = [];
-				let es: string[] = [];
-				let ps: string[] = [];
 				for (const tag of event.tags) {
 					if (tag[0] == 'p') {
 						const pubkey = tag[1];
@@ -328,15 +301,7 @@
 							console.log('bad pubkey', pubkey, tag);
 							continue;
 						}
-						ps.push(pubkey);
 						fetchAndCacheMetadata(server, pubkey);
-						if (!writeRelaysByPubkey.get(pubkey)) {
-							ppromises.push(fetchAndCacheWriteRelays(server, pubkey));
-						}
-					}
-					if (tag[0] == 'e') {
-						const pubkey = tag[1];
-						es.push(pubkey);
 					}
 				}
 				const eventDiv = document.getElementById('events');
@@ -347,50 +312,38 @@
 						}holder' style='border-bottom: solid white 2px; order: ${-event.created_at}; display: flex;  flex-direction: column'> ` +
 						(await showNote(event)) +
 						'</span>';
-					Promise.all(ppromises).then(() => {
-						if (pubkey != lastPubKey) {
-							return;
-						}
-						let newRelays: string[] = [];
-						for (const p of ps) {
-							const r = writeRelaysByPubkey.get(p);
-							if (r) {
-								newRelays = newRelays.concat(r);
+					const idssub = relayPool.subscribeReferencedEvents(
+						// @ts-ignore
+						event,
+						(event2) => {
+							if (pubkey != lastPubKey) {
+								return;
 							}
-						}
-						const idssub = relayPool.subscribe(
-							[{ ids: es, kinds: [1] }],
-							newRelays,
-							(event2) => {
-								if (pubkey != lastPubKey) {
-									return;
-								}
-								num_event2s++;
-								if (num_event2s % 100 == 0) {
-									console.log(
-										'event2',
-										event2,
-										num_event2s,
-										Math.round((performance.now() - start2) / 100) / 10
-									);
-								}
-								fetchAndCacheMetadata(server, event2.pubkey)?.then(async (metadata) => {
-									const eventDiv = document.getElementById(event.id + 'holder');
-									if (eventDiv) {
-										eventDiv.innerHTML += await showNote(event2, metadata);
-										const holder = document.getElementById(event2.id + 'holder');
+							num_event2s++;
+							if (num_event2s % 100 == 0) {
+								console.log(
+									'event2',
+									event2,
+									num_event2s,
+									Math.round((performance.now() - start2) / 100) / 10
+								);
+							}
+							fetchAndCacheMetadata(server, event2.pubkey)?.then(async (metadata) => {
+								const eventDiv = document.getElementById(event.id + 'holder');
+								if (eventDiv) {
+									eventDiv.innerHTML += await showNote(event2, metadata);
+									const holder = document.getElementById(event2.id + 'holder');
 
-										if (holder) {
-											holder.style.display = 'none';
-										}
+									if (holder) {
+										holder.style.display = 'none';
 									}
-								});
-							},
-							30,
-							undefined,
-							{ unsubscribeOnEose: true }
-						);
-					});
+								}
+							});
+						},
+						30,
+						undefined,
+						{ unsubscribeOnEose: true }
+					);
 				}
 			}
 		);
