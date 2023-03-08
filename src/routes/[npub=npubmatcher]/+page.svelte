@@ -316,7 +316,7 @@
 						// @ts-ignore
 						event,
 						(event2) => {
-							if (pubkey != lastPubKey) {
+							if (pubkey != lastPubKey || event2.kind != 1) {
 								return;
 							}
 							num_event2s++;
