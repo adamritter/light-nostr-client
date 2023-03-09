@@ -253,7 +253,7 @@
 		const metadataContent = parseJSON(info0.metadata.content);
 		metadataContent.followerCount = info0.followerCount;
 		relayPool.subscribe(
-			[{ authors: [info0.metadata.pubkey], kinds: [1], limit: 50 }],
+			[{ authors: [info0.metadata.pubkey], kinds: [1], limit: 100 }],
 			undefined,
 			async (event, afterEose, url) => {
 				if (pubkey != lastPubKey) {
@@ -285,6 +285,11 @@
 							if (pubkey != lastPubKey || event2.kind != 1) {
 								return;
 							}
+							const found = event.tags.find((x) => x[1] == event2.id) ? true : false;
+							if (!found) {
+								throw new Error('event2 not found in event.tags');
+							}
+
 							num_event2s++;
 							if (num_event2s % 100 == 0) {
 								console.log(
