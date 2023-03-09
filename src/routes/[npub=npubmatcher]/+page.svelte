@@ -23,9 +23,6 @@
 		website?: string;
 	};
 
-	const metadataByPubkey = new Map<string, Event>();
-	const metadataPromisesByPubkey = new Map<string, Promise<Event>>();
-
 	async function fetchJSON(url: string) {
 		return fetch(url)
 			.then((response) => response.json())
@@ -134,7 +131,7 @@
 				let index = parseInt(match.substring(2, match.length - 1));
 				let tag = event.tags[index];
 				if (tag && tag[1]) {
-					let tagMetadata = await fetchAndCacheMetadata(server, tag[1]);
+					let tagMetadata = await relayPool.fetchAndCacheMetadata(tag[1]);
 					if (tagMetadata) {
 						let infoMetadata = parseJSON(tagMetadata.content) as MetadataContent;
 						if (infoMetadata?.display_name) {
@@ -157,7 +154,7 @@
 	async function showNote(event: Event, metadata?: Event) {
 		const pubkey = event.pubkey;
 		if (!metadata) {
-			metadata = metadataByPubkey.get(event.pubkey);
+			metadata = await relayPool.fetchAndCacheMetadata(pubkey);
 		}
 		const infoMetadata = parseJSON(metadata?.content) as MetadataContent;
 		let body = [];
@@ -191,7 +188,7 @@
 		let content = escapeHtml(event.content).replaceAll('\n', '<br>');
 		// replace http and https with regexp
 		content = content.replaceAll(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank">$1</a>');
-		content = await replaceReferences(event, content);
+		content = await replaceReferences(event, content); // Move to top
 		body.push(`<span>${content}</span><br>`);
 
 		// body.push(`${infoMetadata?.followerCount || 0}  followers<br></span></span>`);
@@ -216,27 +213,6 @@
 	let num_events = 0,
 		num_event2s = 0;
 
-	function fetchMetadata(server: string, pubkey: string) {
-		const url = `${server}/${pubkey}/metadata.json`;
-		return fetchJSON(url);
-	}
-
-	function fetchAndCacheMetadata(server: string, pubkey: string) {
-		if (metadataByPubkey.has(pubkey)) {
-			return Promise.resolve(metadataByPubkey.get(pubkey));
-		}
-		if (metadataPromisesByPubkey.has(pubkey)) {
-			return metadataPromisesByPubkey.get(pubkey);
-		}
-		let r = fetchMetadata(server, pubkey);
-		r.then((x) => {
-			// @ts-ignore
-			metadataByPubkey.set(pubkey, x);
-		});
-		metadataPromisesByPubkey.set(pubkey, r);
-		return r;
-	}
-
 	const server = 'https://rbr.bio';
 	let lastPubKey: string;
 
@@ -255,7 +231,7 @@
 		const info0 = await fetchInfo(server, pubkey);
 		info.set(info0);
 		window.scrollTo(0, 0);
-		metadataByPubkey.set(pubkey, info0.metadata);
+		relayPool.setCachedMetadata(pubkey, info0.metadata);
 		console.log(info0);
 		relays = writeRelaysForContactList(info0.contacts);
 		relayPool.setWriteRelaysForPubKey(pubkey, relays);
@@ -294,16 +270,6 @@
 					);
 				}
 				const start2 = performance.now();
-				for (const tag of event.tags) {
-					if (tag[0] == 'p') {
-						const pubkey = tag[1];
-						if (pubkey.length != 64) {
-							console.log('bad pubkey', pubkey, tag);
-							continue;
-						}
-						fetchAndCacheMetadata(server, pubkey);
-					}
-				}
 				const eventDiv = document.getElementById('events');
 				if (eventDiv) {
 					eventDiv.innerHTML +=
@@ -312,7 +278,7 @@
 						}holder' style='border-bottom: solid white 2px; order: ${-event.created_at}; display: flex;  flex-direction: column'> ` +
 						(await showNote(event)) +
 						'</span>';
-					const idssub = relayPool.subscribeReferencedEvents(
+					const idssub = relayPool.subscribeReferencedEventsAndPrefetchMetadata(
 						// @ts-ignore
 						event,
 						(event2) => {
@@ -328,7 +294,7 @@
 									Math.round((performance.now() - start2) / 100) / 10
 								);
 							}
-							fetchAndCacheMetadata(server, event2.pubkey)?.then(async (metadata) => {
+							relayPool.fetchAndCacheMetadata(event2.pubkey)?.then(async (metadata) => {
 								const eventDiv = document.getElementById(event.id + 'holder');
 								if (eventDiv) {
 									eventDiv.innerHTML += await showNote(event2, metadata);
