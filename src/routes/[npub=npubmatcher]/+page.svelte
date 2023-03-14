@@ -8,148 +8,21 @@
 
 	// English.
 	import en from 'javascript-time-ago/locale/en';
+	import {
+		escapeHtml,
+		fetchInfo,
+		npubDecode,
+		npubEncode,
+		profileForInfoMetadata,
+		replaceReferences,
+		writeRelaysForContactList,
+		parseJSON,
+		type MetadataContent
+	} from '../../lib/helpers';
 	TimeAgo.addLocale(en);
 
 	// Create formatter (English).
 	const timeAgo = new TimeAgo('en-US');
-
-	type MetadataContent = {
-		picture?: string;
-		display_name?: string;
-		name?: string;
-		nip05?: string;
-		about?: string;
-		followerCount?: number;
-		website?: string;
-	};
-
-	async function fetchJSON(url: string) {
-		return fetch(url)
-			.then((response) => response.json())
-			.catch((e) => {
-				throw new Error('error fetching ' + url + ' ' + e);
-			});
-	}
-
-	function npubEncode(pubkey: string) {
-		try {
-			return nip19.npubEncode(pubkey);
-		} catch (e) {
-			console.error('invalid pubkey ', pubkey + ' called from npubEncode');
-			throw new Error('invalid pubkey' + pubkey + e);
-		}
-	}
-	function npubDecode(npub: string): string {
-		try {
-			// @ts-ignore
-			return nip19.decode(npub).data;
-		} catch (e) {
-			console.error('invalid npub ', npub + ' called from npubDecode');
-			throw new Error('invalid npub' + npub + e);
-		}
-	}
-	async function fetchInfo(server: string, pubkey: string) {
-		const url = `${server}/${pubkey}/info.json`;
-		return fetchJSON(url);
-	}
-
-	function writeRelaysForContactList(contactList?: { content: string }) {
-		let relays = [];
-		// @ts-ignore
-		let data = JSON.parse(contactList?.content);
-		if (data) {
-			for (let [url, read_write] of Object.entries(data)) {
-				// @ts-ignore
-				if (read_write?.write) {
-					relays.push(url);
-				}
-			}
-		}
-		return relays;
-	}
-
-	function profileForInfoMetadata(
-		infoMetadata: {
-			picture?: string;
-			display_name?: string;
-			name?: string;
-			nip05?: string;
-			about?: string;
-			followerCount?: number;
-		},
-		pubkey: string
-	) {
-		let body = [];
-		let picture = infoMetadata?.picture;
-		body.push('<span style="display: flex; justify-content: flex-start;">');
-		if (picture) {
-			body.push(
-				`<a onclick='load(
-					"${pubkey}"
-				)'><img src='${picture}' style='border-radius: 50%; cursor: pointer; max-height: 60px); max-width: 60px;' width=60 height=60></a><br>`
-			);
-		} else {
-			// just leave 60px
-			body.push("<span style='width: 60px'></span>");
-		}
-		body.push('<span>');
-		body.push(`<a href="#" onclick='load(
-					"${pubkey}"
-				)'>`);
-		if (infoMetadata.display_name) {
-			body.push(`<b style='font-size: 20px'>${infoMetadata.display_name}</b>`);
-		}
-		if (infoMetadata.name) {
-			body.push(` @${infoMetadata.name}<br>`);
-		}
-		body.push('</a><br>');
-		if (infoMetadata.nip05) {
-			body.push(`<span style='color: #34ba7c'>${infoMetadata.nip05}</span><br>`);
-		}
-		if (infoMetadata.about) {
-			body.push(`${infoMetadata.about}<br>`);
-		}
-
-		body.push(`${infoMetadata?.followerCount || 0}  followers<br></span></span>`);
-		return body.join('');
-	}
-	const escapeHtml = (unsafe) => {
-		return unsafe
-			.replaceAll('&', '&amp;')
-			.replaceAll('<', '&lt;')
-			.replaceAll('>', '&gt;')
-			.replaceAll('"', '&quot;')
-			.replaceAll("'", '&#039;');
-	};
-
-	async function replaceReferences(event: Event, content: string) {
-		// find #[number]
-		let matches = content.match(/#\[[0-9]+\]/g);
-		// which metadata.tags does it map to?
-		if (matches) {
-			for (let match of matches) {
-				let index = parseInt(match.substring(2, match.length - 1));
-				let tag = event.tags[index];
-				if (tag && tag[1]) {
-					let tagMetadata = await relayPool.fetchAndCacheMetadata(tag[1]);
-					if (tagMetadata) {
-						let infoMetadata = parseJSON(tagMetadata.content) as MetadataContent;
-						if (infoMetadata?.display_name) {
-							content = content.replaceAll(
-								match,
-								`<a onclick="load('${tag[1]}')">@${infoMetadata.display_name}</a>`
-							);
-						} else {
-							content = content.replaceAll(match, `<a onclick="load('${tag[1]}')">@${tag[1]}</a>`);
-						}
-					}
-				} else {
-					console.log('no tag found for ', match, 'index', index, 'tags', event.tags);
-				}
-			}
-		}
-		return content;
-	}
 
 	async function showNote(event: Event, metadata?: Event) {
 		const pubkey = event.pubkey;
@@ -187,8 +60,16 @@
 
 		let content = escapeHtml(event.content).replaceAll('\n', '<br>');
 		// replace http and https with regexp
+		// content = content.replaceAll(
+		// 	/(https?:\/\/[^\s]+\.(png|jpg|jpeg))/g,
+		// 	'<img src="https://imgproxy.iris.to/insecure/rs:fit:1138:1138/plain/$1" width="569" height="569" />'
+		// );
+		// content = content.replaceAll(
+		// 	/(\s)(https?:\/\/[^\s]+)/g,
+		// 	'$1<a href="$2" target="_blank">$2</a>'
+		// );
 		content = content.replaceAll(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank">$1</a>');
-		content = await replaceReferences(event, content); // Move to top
+		content = await replaceReferences(event, content, relayPool); // Move to top
 		body.push(`<span>${content}</span><br>`);
 
 		// body.push(`${infoMetadata?.followerCount || 0}  followers<br></span></span>`);
@@ -201,19 +82,13 @@
 		following: any[];
 		followerCount?: number;
 	}>();
+	const writableMetadataPromise = writable<Promise<Event>>();
 	let relays;
-
-	function selectRandom(array: any[], n: number) {
-		return array
-			.slice()
-			.sort(() => 0.5 - Math.random())
-			.slice(0, n);
-	}
 
 	let num_events = 0,
 		num_event2s = 0;
 
-	const server = 'https://rbr.bio';
+	const server = 'https://eu.rbr.bio';
 	let lastPubKey: string;
 
 	export async function load(pubkey: string) {
@@ -222,10 +97,7 @@
 		}
 		lastPubKey = pubkey;
 		window.history.pushState(pubkey, pubkey, `/${npubEncode(pubkey)}`);
-		if (relayPool) {
-			relayPool.close();
-			relayPool = new RelayPool(undefined, { logSubscriptions: true });
-		}
+		writableMetadataPromise.set(relayPool.fetchAndCacheMetadata(pubkey));
 
 		const start = performance.now();
 		const info0 = await fetchInfo(server, pubkey);
@@ -233,8 +105,10 @@
 		window.scrollTo(0, 0);
 		relayPool.setCachedMetadata(pubkey, info0.metadata);
 		console.log(info0);
-		relays = writeRelaysForContactList(info0.contacts);
-		relayPool.setWriteRelaysForPubKey(pubkey, relays);
+		relayPool.setWriteRelaysForPubKey(pubkey, writeRelaysForContactList(info0.contacts));
+		metadataContent = parseJSON(info0.metadata.content);
+		metadataContent.followerCount = info0.followerCount;
+
 		let e = document?.getElementById?.('events');
 		if (e) {
 			e.innerHTML = '';
@@ -249,11 +123,8 @@
 			q.value = '';
 		}
 
-		console.log('relays', relays);
-		const metadataContent = parseJSON(info0.metadata.content);
-		metadataContent.followerCount = info0.followerCount;
 		relayPool.subscribe(
-			[{ authors: [info0.metadata.pubkey], kinds: [1], limit: 100 }],
+			[{ authors: [lastPubKey], kinds: [1], limit: 100 }],
 			undefined,
 			async (event, afterEose, url) => {
 				if (pubkey != lastPubKey) {
@@ -269,6 +140,7 @@
 						Math.round((performance.now() - start) / 100) / 10
 					);
 				}
+				// console.log('event', event.id, event);
 				const start2 = performance.now();
 				const eventDiv = document.getElementById('events');
 				if (eventDiv) {
@@ -282,6 +154,7 @@
 						// @ts-ignore
 						event,
 						(event2) => {
+							// console.log('event2', event2, event2.id, ' for event ', event, event.id);
 							if (pubkey != lastPubKey || event2.kind != 1) {
 								return;
 							}
@@ -327,18 +200,18 @@
 		}
 		// load('6e3f51664e19e082df5217fd4492bb96907405a0b27028671dd7f297b688608c');
 	});
-	function parseJSON(json: string | undefined) {
-		if (json) {
-			return JSON.parse(json);
-		}
-	}
 
+	let relayPool: RelayPool = new RelayPool(null, { logSubscriptions: true });
 	let metadataContent: MetadataContent;
 	$: metadataContent = parseJSON($info?.metadata?.content);
 	$: console.log(metadataContent);
-	let relayPool: RelayPool = new RelayPool(null, { logSubscriptions: true });
 </script>
 
+<!-- WMP: {$writableMetadataPromise} -->
+<!-- {#await $writableMetadataPromise then metadata} -->
+<!-- MD: {metadata} -->
+<!-- {#if metadata && metadata.content} -->
+<!-- {@const metadataContent = parseJSON(metadata.content)} -->
 {#if metadataContent}
 	<span style="display: flex; justify-content: flex-start;">
 		{#if metadataContent.picture}
@@ -383,6 +256,8 @@
 		</span>
 	</span>
 {/if}
+<!-- {/if} -->
+<!-- {/await} -->
 
 <span
 	id="eventsandinfo"
