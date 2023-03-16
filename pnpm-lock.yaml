@@ -10,7 +10,7 @@ specifiers:
   eslint-config-prettier: ^8.5.0
   eslint-plugin-svelte3: ^4.0.0
   javascript-time-ago: ^2.5.9
-  nostr-relaypool: ^0.5.16
+  nostr-relaypool: ^0.5.18
   nostr-tools: ^1.7.1
   prettier: ^2.8.0
   prettier-plugin-svelte: ^2.8.1
@@ -24,7 +24,7 @@ specifiers:
 
 dependencies:
   javascript-time-ago: 2.5.9
-  nostr-relaypool: 0.5.16_ws@8.12.1
+  nostr-relaypool: 0.5.18_ws@8.12.1
   nostr-tools: 1.7.1
   ws: 8.12.1
 
@@ -1399,8 +1399,8 @@ packages:
     engines: {node: '>=0.10.0'}
     dev: true
 
-  /nostr-relaypool/0.5.16_ws@8.12.1:
-    resolution: {integrity: sha512-TJpIvcP3CUgayVrKBtpRpis4NLNYVP7sRIOCp4nbf+M5yC/bcm8VSinxL1uNZ+vSZS4HDcPl9WFbVWQJgR0XaA==}
+  /nostr-relaypool/0.5.18_ws@8.12.1:
+    resolution: {integrity: sha512-l3bR034akVSdd/jSOqcj33k1BYaAwqbJMJQFg3cJ/BXPrXy6fPSd4Qye0vuF+MwtqokmLFa68MM8hbfHeOgYtQ==}
     dependencies:
       '@jest/source-map': 29.4.3
       isomorphic-ws: 5.0.0_ws@8.12.1

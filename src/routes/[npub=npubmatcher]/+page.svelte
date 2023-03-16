@@ -14,68 +14,17 @@
 		npubDecode,
 		npubEncode,
 		profileForInfoMetadata,
-		replaceReferences,
 		writeRelaysForContactList,
 		parseJSON,
-		type MetadataContent
+		type MetadataContent,
+		showNote,
+		htmlToElement
 	} from '../../lib/helpers';
 	TimeAgo.addLocale(en);
 
 	// Create formatter (English).
 	const timeAgo = new TimeAgo('en-US');
 
-	async function showNote(event: Event, metadata?: Event) {
-		const pubkey = event.pubkey;
-		if (!metadata) {
-			metadata = await relayPool.fetchAndCacheMetadata(pubkey);
-		}
-		const infoMetadata = parseJSON(metadata?.content) as MetadataContent;
-		let body = [];
-		let picture = infoMetadata?.picture;
-		body.push(
-			`<span style="display: flex; justify-content: flex-start; order: ${event.created_at}" id="${event.id}">`
-		);
-		if (picture) {
-			body.push(
-				`<a onclick='load(
-					"${pubkey}"
-				)'><img src='${picture}' style='border-radius: 50%; cursor: pointer; max-height:30px; max-width: 30px;' width=60 height=60></a><br>`
-			);
-		} else {
-			// just leave 60px
-			body.push("<span style='width: 60px'></span>");
-		}
-		body.push('<span>');
-		body.push(`<a href="#" onclick='load(
-					"${pubkey}"
-				)'>`);
-		if (infoMetadata.display_name) {
-			body.push(`<b style='font-size: 20px'>${infoMetadata.display_name}</b>`);
-		}
-		if (infoMetadata.name) {
-			body.push(` @${infoMetadata.name}`);
-		}
-		body.push(' ' + timeAgo.format(event.created_at * 1000, 'mini'));
-		body.push('<br></a>');
-
-		let content = escapeHtml(event.content).replaceAll('\n', '<br>');
-		// replace http and https with regexp
-		// content = content.replaceAll(
-		// 	/(https?:\/\/[^\s]+\.(png|jpg|jpeg))/g,
-		// 	'<img src="https://imgproxy.iris.to/insecure/rs:fit:1138:1138/plain/$1" width="569" height="569" />'
-		// );
-		// content = content.replaceAll(
-		// 	/(\s)(https?:\/\/[^\s]+)/g,
-		// 	'$1<a href="$2" target="_blank">$2</a>'
-		// );
-		content = content.replaceAll(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank">$1</a>');
-		content = await replaceReferences(event, content, relayPool); // Move to top
-		body.push(`<span>${content}</span><br>`);
-
-		// body.push(`${infoMetadata?.followerCount || 0}  followers<br></span></span>`);
-		body.push('</span></span>');
-		return body.join('');
-	}
 	let info = writable<{
 		metadata: Event;
 		contacts: Event;
@@ -88,7 +37,7 @@
 	let num_events = 0,
 		num_event2s = 0;
 
-	const server = 'https://eu.rbr.bio';
+	const server = 'https://us.rbr.bio';
 	let lastPubKey: string;
 
 	export async function load(pubkey: string) {
@@ -127,7 +76,10 @@
 			[{ authors: [lastPubKey], kinds: [1], limit: 100 }],
 			undefined,
 			async (event, afterEose, url) => {
+				const eventIdWithContent = event.id + ' ' + event.content;
+				console.log('got event', eventIdWithContent);
 				if (pubkey != lastPubKey) {
+					console.log('pubkey != lastPubKey while trying to show event', eventIdWithContent);
 					return;
 				}
 				num_events++;
@@ -144,23 +96,32 @@
 				const start2 = performance.now();
 				const eventDiv = document.getElementById('events');
 				if (eventDiv) {
-					eventDiv.innerHTML +=
+					console.log('adding event to div ', eventIdWithContent);
+					const holderHtml =
 						`<span id='${
 							event.id
 						}holder' style='border-bottom: solid white 2px; order: ${-event.created_at}; display: flex;  flex-direction: column'> ` +
-						(await showNote(event)) +
+						(await showNote(event, undefined, relayPool)) +
 						'</span>';
+					eventDiv.appendChild(htmlToElement(holderHtml));
+
 					const idssub = relayPool.subscribeReferencedEventsAndPrefetchMetadata(
 						// @ts-ignore
 						event,
 						(event2) => {
-							// console.log('event2', event2, event2.id, ' for event ', event, event.id);
-							if (pubkey != lastPubKey || event2.kind != 1) {
+							let event2IdWithContent = event2.id + ' ' + event2.content;
+							console.log('event2', event2IdWithContent, ' for event ', eventIdWithContent);
+							if (event2.kind != 1) {
+								console.log('kind != 1 for event2 ', event2.id);
+								return;
+							}
+							if (pubkey != lastPubKey) {
+								console.log('pubkey != lastPubKey while trying to show event', event2IdWithContent);
 								return;
 							}
 							const found = event.tags.find((x) => x[1] == event2.id) ? true : false;
 							if (!found) {
-								throw new Error('event2 not found in event.tags');
+								throw new Error('event2 not found in event.tags ' + event2IdWithContent);
 							}
 
 							num_event2s++;
@@ -172,10 +133,15 @@
 									Math.round((performance.now() - start2) / 100) / 10
 								);
 							}
+							console.log('fetching metadata for ', event2.pubkey, event2IdWithContent);
 							relayPool.fetchAndCacheMetadata(event2.pubkey)?.then(async (metadata) => {
-								const eventDiv = document.getElementById(event.id + 'holder');
-								if (eventDiv) {
-									eventDiv.innerHTML += await showNote(event2, metadata);
+								console.log('got metadata for event ', event2IdWithContent);
+								const eventDiv2 = document.getElementById(event.id + 'holder');
+								if (eventDiv2) {
+									console.log('found holder for event ', event2IdWithContent);
+									const noteHtml = await showNote(event2, metadata, relayPool);
+									eventDiv2.appendChild(htmlToElement(noteHtml));
+									console.log('added event2 to div ', event2IdWithContent, eventIdWithContent);
 									const holder = document.getElementById(event2.id + 'holder');
 
 									if (holder) {
