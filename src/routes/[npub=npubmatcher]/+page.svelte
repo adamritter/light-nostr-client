@@ -1,5 +1,14 @@
+<!-- TODO:
+  - Merge threads
+  - Recursive retrieve replies
+  - Show replies
+  - Show likes
+  - Show reposts
+  - Show follows
+   
+-->
 <script lang="ts">
-	import { nip19 } from 'nostr-tools';
+	import { getEventHash, nip19 } from 'nostr-tools';
 	import { onMount } from 'svelte';
 	import { writable } from 'svelte/store';
 	import type { Event } from 'nostr-tools';
@@ -39,11 +48,13 @@
 
 	const server = 'https://us.rbr.bio';
 	let lastPubKey: string;
+	let redirectHolder: Map<string, string> = new Map();
 
 	export async function load(pubkey: string) {
 		if (pubkey === lastPubKey) {
 			return;
 		}
+		redirectHolder = new Map();
 		lastPubKey = pubkey;
 		window.history.pushState(pubkey, pubkey, `/${npubEncode(pubkey)}`);
 		writableMetadataPromise.set(relayPool.fetchAndCacheMetadata(pubkey));
@@ -97,11 +108,14 @@
 				const eventDiv = document.getElementById('events');
 				if (eventDiv) {
 					console.log('adding event to div ', eventIdWithContent);
+					const noteHtml = await showNote(event, undefined, relayPool);
+					let existingEvent = document.getElementById(event.id);
+					// If the event already exists,
 					const holderHtml =
 						`<span id='${
 							event.id
 						}holder' style='border-bottom: solid white 2px; order: ${-event.created_at}; display: flex;  flex-direction: column'> ` +
-						(await showNote(event, undefined, relayPool)) +
+						noteHtml +
 						'</span>';
 					eventDiv.appendChild(htmlToElement(holderHtml));
 
@@ -136,10 +150,10 @@
 							console.log('fetching metadata for ', event2.pubkey, event2IdWithContent);
 							relayPool.fetchAndCacheMetadata(event2.pubkey)?.then(async (metadata) => {
 								console.log('got metadata for event ', event2IdWithContent);
+								const noteHtml = await showNote(event2, metadata, relayPool);
 								const eventDiv2 = document.getElementById(event.id + 'holder');
 								if (eventDiv2) {
 									console.log('found holder for event ', event2IdWithContent);
-									const noteHtml = await showNote(event2, metadata, relayPool);
 									eventDiv2.appendChild(htmlToElement(noteHtml));
 									console.log('added event2 to div ', event2IdWithContent, eventIdWithContent);
 									const holder = document.getElementById(event2.id + 'holder');
@@ -201,7 +215,13 @@
 				{#if metadataContent.name}
 					@{metadataContent.name}<br />
 				{/if}
-			</a><br />
+			</a>
+			<input
+				type="text"
+				value={npubEncode($info.metadata.pubkey)}
+				onclick="this.select(); document.execCommand('copy');"
+			/>
+			<br />
 			{#if metadataContent.nip05}
 				<span style="color: #34ba7c">{metadataContent.nip05}</span><br />
 			{/if}

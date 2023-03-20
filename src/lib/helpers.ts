@@ -180,6 +180,13 @@ export function selectRandom(array: any[], n: number) {
 		.slice(0, n);
 }
 
+export function getFinalRedirect(id: string, redirectHolders: Map<string, string>) {
+	while (redirectHolders.has(id)) {
+		id = redirectHolders.get(id)!;
+	}
+	return id;
+}
+
 export async function showNote(event: Event, metadata?: Event, relayPool: RelayPool) {
 	const pubkey = event.pubkey;
 	if (!metadata) {
