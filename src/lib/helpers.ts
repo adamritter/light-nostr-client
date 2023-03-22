@@ -50,8 +50,12 @@ export function npubDecode(npub: string): string {
 	}
 }
 export async function fetchInfo(server: string, pubkey: string) {
-	const url = `${server}/${pubkey}/info.json`;
-	return fetchJSON(url);
+	return new Promise((resolve) => {
+		for (const server of ['https://us.rbr.bio', 'https://eu.rbr.bio']) {
+			const url = `${server}/${pubkey}/info.json`;
+			fetchJSON(url).then(resolve);
+		}
+	});
 }
 
 const DEFAULT_RELAYS = [
