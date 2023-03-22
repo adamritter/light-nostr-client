@@ -144,7 +144,7 @@ export function profileForInfoMetadata(
 		body.push("<span style='width: 60px'></span>");
 	}
 	body.push('<span>');
-	body.push(`<a href="#" onclick='load(
+	body.push(`<a onclick='load(
                 "${pubkey}"
             )'>`);
 	if (infoMetadata.display_name) {
@@ -209,7 +209,7 @@ export async function showNote(event: Event, metadata?: Event, relayPool: RelayP
 		body.push("<span style='width: 60px'></span>");
 	}
 	body.push('<span>');
-	body.push(`<a href="#" onclick='load(
+	body.push(`<a onclick='load(
 				"${pubkey}"
 			)'>`);
 	if (infoMetadata.display_name) {
