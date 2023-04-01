@@ -8,7 +8,6 @@
    
 -->
 <script lang="ts">
-	import { getEventHash, nip19 } from 'nostr-tools';
 	import { onMount } from 'svelte';
 	import { writable } from 'svelte/store';
 	import type { Event } from 'nostr-tools';
@@ -27,7 +26,9 @@
 		parseJSON,
 		type MetadataContent,
 		showNote,
-		htmlToElement
+		htmlToElement,
+		putUnder,
+		createOrGetHolderElement
 	} from '../../lib/helpers';
 	TimeAgo.addLocale(en);
 
@@ -46,7 +47,6 @@
 	let num_events = 0,
 		num_event2s = 0;
 
-	const server = 'https://us.rbr.bio';
 	let lastPubKey: string;
 	let redirectHolder: Map<string, string> = new Map();
 
@@ -60,7 +60,7 @@
 		writableMetadataPromise.set(relayPool.fetchAndCacheMetadata(pubkey));
 
 		const start = performance.now();
-		const info0 = await fetchInfo(server, pubkey);
+		const info0 = await fetchInfo(pubkey);
 		info.set(info0);
 		window.scrollTo(0, 0);
 		relayPool.setCachedMetadata(pubkey, info0.metadata);
@@ -110,14 +110,20 @@
 					console.log('adding event to div ', eventIdWithContent);
 					const noteHtml = await showNote(event, undefined, relayPool);
 					let existingEvent = document.getElementById(event.id);
-					// If the event already exists,
-					const holderHtml =
-						`<span id='${
-							event.id
-						}holder' style='border-bottom: solid white 2px; order: ${-event.created_at}; display: flex;  flex-direction: column'> ` +
-						noteHtml +
-						'</span>';
-					eventDiv.appendChild(htmlToElement(holderHtml));
+					const holderElement = createOrGetHolderElement(
+						eventDiv,
+						event.id + 'holder',
+						-event.created_at,
+						redirectHolder
+					);
+					const holderid = holderElement.id;
+					putUnder(holderid, event.id, noteHtml, redirectHolder);
+					// const note = htmlToElement(noteHtml);
+					// if (note) {
+					// 	holderElement.appendChild(note);
+					// } else {
+					// 	console.log('note is null for event ', eventIdWithContent);
+					// }
 
 					const idssub = relayPool.subscribeReferencedEventsAndPrefetchMetadata(
 						// @ts-ignore
@@ -151,17 +157,7 @@
 							relayPool.fetchAndCacheMetadata(event2.pubkey)?.then(async (metadata) => {
 								console.log('got metadata for event ', event2IdWithContent);
 								const noteHtml = await showNote(event2, metadata, relayPool);
-								const eventDiv2 = document.getElementById(event.id + 'holder');
-								if (eventDiv2) {
-									console.log('found holder for event ', event2IdWithContent);
-									eventDiv2.appendChild(htmlToElement(noteHtml));
-									console.log('added event2 to div ', event2IdWithContent, eventIdWithContent);
-									const holder = document.getElementById(event2.id + 'holder');
-
-									if (holder) {
-										holder.style.display = 'none';
-									}
-								}
+								putUnder(event.id + 'holder', event2.id, noteHtml, redirectHolder);
 							});
 						},
 						30,

@@ -49,7 +49,12 @@ export function npubDecode(npub: string): string {
 		throw new Error('invalid npub' + npub + e);
 	}
 }
-export async function fetchInfo(server: string, pubkey: string) {
+export async function fetchInfo(pubkey: string): Promise<{
+	metadata: Event;
+	contacts: Event;
+	following: any[];
+	followerCount?: number;
+}> {
 	return new Promise((resolve) => {
 		for (const server of ['https://us.rbr.bio', 'https://eu.rbr.bio']) {
 			const url = `${server}/${pubkey}/info.json`;
@@ -254,4 +259,78 @@ export function htmlToElement(html: string) {
 	template.innerHTML = html;
 	const node = template.content.firstChild;
 	return template.content.firstChild;
+}
+
+function moveElements(from: string, to: string, holderRedirects: Map<string, string>) {
+	console.log('putUnder moveElements', from, to);
+	const fromHolder = document.getElementById(from);
+	const toHolder = document.getElementById(to);
+	if (fromHolder && toHolder) {
+		holderRedirects.set(from, to);
+		while (fromHolder.firstChild) {
+			toHolder.appendChild(fromHolder.firstChild);
+		}
+		fromHolder.remove();
+	}
+}
+
+export function putUnder(
+	holderElementId: string,
+	elementid: string,
+	elementHTML: string,
+	holderRedirects: Map<string, string>
+) {
+	console.log('putUnder', holderElementId, elementid);
+	while (holderRedirects.has(holderElementId)) {
+		holderElementId = holderRedirects.get(holderElementId)!;
+	}
+	const elementAlreadyExist = document.getElementById(elementid);
+	const holderElement = document.getElementById(holderElementId);
+	if (!holderElement) {
+		console.error('holderElement not found', holderElementId);
+		return;
+	}
+	if (elementAlreadyExist) {
+		const returnIfExist = false;
+		if (returnIfExist) {
+			return;
+		}
+		const holderAlreadyExistId = elementAlreadyExist.parentElement.id;
+		if (holderAlreadyExistId !== holderElementId) {
+			const holderAlreadyExistScore = parseFloat(elementAlreadyExist.parentElement.style.order);
+			const holderElementScore = parseFloat(holderElement.style.order);
+			if (holderAlreadyExistScore > holderElementScore) {
+				moveElements(holderElementId, holderAlreadyExistId, holderRedirects);
+			} else {
+				moveElements(holderAlreadyExistId, holderElementId, holderRedirects);
+			}
+		}
+		return;
+	}
+
+	if (holderElement) {
+		const element = htmlToElement(elementHTML);
+		element.id = elementid;
+		holderElement.appendChild(element);
+	}
+}
+
+export function createOrGetHolderElement(
+	eventsElement,
+	holderId,
+	score,
+	redirectHolder
+): HTMLElement {
+	while (redirectHolder.has(holderId)) {
+		holderId = redirectHolder.get(holderId)!;
+	}
+	const existingHolderElement = document.getElementById(holderId);
+	if (existingHolderElement) {
+		return existingHolderElement;
+	}
+	const holderHtml = `<span id='${holderId}' style='border-bottom: solid white 2px; order: ${score}; display: flex;  flex-direction: column'></span>`;
+	const holderElement = htmlToElement(holderHtml);
+	eventsElement.appendChild(holderElement);
+
+	return holderElement;
 }
