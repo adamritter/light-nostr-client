@@ -4,6 +4,7 @@ import type { Event } from 'nostr-tools';
 
 // English.
 import en from 'javascript-time-ago/locale/en';
+import type { RelayPool } from 'nostr-relaypool';
 TimeAgo.addLocale(en);
 
 // Create formatter (English).
@@ -139,8 +140,8 @@ export function profileForInfoMetadata(
 	},
 	pubkey: string
 ) {
-	let body = [];
-	let picture = infoMetadata?.picture;
+	const body = [];
+	const picture = infoMetadata?.picture;
 	body.push('<span style="display: flex; justify-content: flex-start;">');
 	if (picture) {
 		body.push(
@@ -196,7 +197,7 @@ export function getFinalRedirect(id: string, redirectHolders: Map<string, string
 	return id;
 }
 
-export async function showNote(event: Event, metadata?: Event, relayPool: RelayPool) {
+export async function showNote(event: Event, metadata: Event | undefined, relayPool: RelayPool) {
 	const pubkey = event.pubkey;
 	if (!metadata) {
 		metadata = await relayPool.fetchAndCacheMetadata(pubkey);
@@ -253,12 +254,12 @@ export async function showNote(event: Event, metadata?: Event, relayPool: RelayP
  * @param {String} HTML representing a single element
  * @return {Element}
  */
-export function htmlToElement(html: string) {
+export function htmlToElement(html: string): HTMLElement {
 	const template = document.createElement('template');
 	html = html.trim(); // Never return a text node of whitespace as the result
 	template.innerHTML = html;
 	const node = template.content.firstChild;
-	return template.content.firstChild;
+	return node as HTMLElement;
 }
 
 function moveElements(from: string, to: string, holderRedirects: Map<string, string>) {
@@ -295,8 +296,8 @@ export function putUnder(
 		if (returnIfExist) {
 			return;
 		}
-		const holderAlreadyExistId = elementAlreadyExist.parentElement.id;
-		if (holderAlreadyExistId !== holderElementId) {
+		const holderAlreadyExistId = elementAlreadyExist.parentElement?.id;
+		if (holderAlreadyExistId && holderAlreadyExistId !== holderElementId) {
 			const holderAlreadyExistScore = parseFloat(elementAlreadyExist.parentElement.style.order);
 			const holderElementScore = parseFloat(holderElement.style.order);
 			if (holderAlreadyExistScore > holderElementScore) {
@@ -316,10 +317,10 @@ export function putUnder(
 }
 
 export function createOrGetHolderElement(
-	eventsElement,
-	holderId,
-	score,
-	redirectHolder
+	eventsElement: HTMLElement,
+	holderId: string,
+	score: number,
+	redirectHolder: Map<string, string>
 ): HTMLElement {
 	while (redirectHolder.has(holderId)) {
 		holderId = redirectHolder.get(holderId)!;
@@ -333,4 +334,136 @@ export function createOrGetHolderElement(
 	eventsElement.appendChild(holderElement);
 
 	return holderElement;
+}
+
+export async function handleEvent2(
+	event: Event,
+	event2: Event,
+	relayPool: RelayPool,
+	pubkey: string,
+	getLastPubKey: () => string,
+	redirectHolder: Map<string, string>,
+	counters: { num_event2s: number },
+	start2: number
+) {
+	const eventIdWithContent = event.id + ' ' + event.content;
+	const event2IdWithContent = event2.id + ' ' + event2.content;
+	console.log('event2', event2IdWithContent, ' for event ', eventIdWithContent);
+	if (event2.kind != 1) {
+		console.log('kind != 1 for event2 ', event2.id);
+		return;
+	}
+	if (pubkey != getLastPubKey()) {
+		console.log('pubkey != lastPubKey while trying to show event', event2IdWithContent);
+		return;
+	}
+	const found = event.tags.find((x) => x[1] == event2.id) ? true : false;
+	if (!found) {
+		throw new Error('event2 not found in event.tags ' + event2IdWithContent);
+	}
+
+	counters.num_event2s++;
+	if (counters.num_event2s % 100 == 0) {
+		console.log(
+			'event2',
+			event2,
+			counters.num_event2s,
+			Math.round((performance.now() - start2) / 100) / 10
+		);
+	}
+	console.log('fetching metadata for ', event2.pubkey, event2IdWithContent);
+	relayPool.fetchAndCacheMetadata(event2.pubkey)?.then(async (metadata) => {
+		console.log('got metadata for event ', event2IdWithContent);
+		const noteHtml = await showNote(event2, metadata, relayPool);
+		putUnder(event.id + 'holder', event2.id, noteHtml, redirectHolder);
+	});
+}
+
+export async function subscribeCallback(
+	event: any,
+	afterEose: any,
+	url: string | undefined,
+	pubkey: string,
+	getLastPubKey: () => string,
+	redirectHolder: Map<string, string>,
+	counters: { num_events: number; num_event2s: number },
+	start: number,
+	relayPool: any
+) {
+	const eventIdWithContent = event.id + ' ' + event.content;
+	console.log('got event', eventIdWithContent);
+	if (pubkey != getLastPubKey()) {
+		console.log('pubkey != lastPubKey while trying to show event', eventIdWithContent);
+		return;
+	}
+	counters.num_events++;
+	if (counters.num_events % 50 == 0) {
+		console.log(
+			event,
+			afterEose,
+			url,
+			counters.num_events,
+			Math.round((performance.now() - start) / 100) / 10
+		);
+	}
+	const start2 = performance.now();
+	const eventDiv = document.getElementById('events');
+	if (eventDiv) {
+		console.log('adding event to div ', eventIdWithContent);
+		const noteHtml = await showNote(event, undefined, relayPool);
+		const existingEvent = document.getElementById(event.id);
+		const holderElement = createOrGetHolderElement(
+			eventDiv,
+			event.id + 'holder',
+			-event.created_at,
+			redirectHolder
+		);
+		const holderid = holderElement.id;
+		putUnder(holderid, event.id, noteHtml, redirectHolder);
+		const idssub = relayPool.subscribeReferencedEventsAndPrefetchMetadata(
+			event,
+			(event2: any) => {
+				handleEvent2(
+					event,
+					event2,
+					relayPool,
+					pubkey,
+					getLastPubKey, // Use the function to get the latest lastPubKey value
+					redirectHolder,
+					counters,
+					start2
+				);
+			},
+			30,
+			undefined,
+			{ unsubscribeOnEose: true }
+		);
+	}
+}
+
+export async function subscribeToEvents(
+	relayPool: RelayPool,
+	redirectHolder: Map<string, string>,
+	counters: { num_events: number; num_event2s: number },
+	start: number,
+	pubkey: string,
+	currentPubKeyFn: () => string
+) {
+	relayPool.subscribe(
+		[{ authors: [pubkey], kinds: [1], limit: 100 }],
+		undefined,
+		async (event, afterEose, url) => {
+			await subscribeCallback(
+				event,
+				afterEose,
+				url,
+				pubkey,
+				currentPubKeyFn, // Pass a function to get the current pubkey value
+				redirectHolder,
+				counters,
+				start,
+				relayPool
+			);
+		}
+	);
 }
