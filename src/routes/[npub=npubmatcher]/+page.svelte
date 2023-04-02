@@ -1,6 +1,5 @@
 <!-- TODO:
   - Recursive retrieve replies
-  - Show replies
   - Show likes
   - Show reposts
   - Show follows
@@ -48,6 +47,9 @@
 		if (pubkey === lastPubKey) {
 			return;
 		}
+		if (metadataContent) {
+			metadataContent.picture = '';
+		}
 		redirectHolder = new Map();
 		lastPubKey = pubkey;
 		window.history.pushState(pubkey, pubkey, `/${npubEncode(pubkey)}`);
@@ -56,9 +58,7 @@
 		const start = performance.now();
 
 		let e = document?.getElementById?.('events');
-		if (e) {
-			e.innerHTML = '';
-		}
+		e?.replaceChildren();
 		subscribeToEvents(relayPool, redirectHolder, counters, start, pubkey, () => lastPubKey);
 		relayPool.fetchAndCacheMetadata(pubkey).then((metadata) => {
 			if (pubkey === lastPubKey) {
@@ -66,6 +66,13 @@
 				window.scrollTo(0, 0);
 			}
 		});
+		const qel = document.getElementById('search-results');
+		qel?.replaceChildren();
+		const q = document.getElementById('q');
+		if (q) {
+			// @ts-ignore
+			q.value = '';
+		}
 		const info0 = await fetchInfo(pubkey);
 		info.set(info0);
 		relayPool.setCachedMetadata(pubkey, info0.metadata);
@@ -75,16 +82,6 @@
 			writeRelaysForContactList(info0.contacts),
 			info0.contacts.created_at
 		);
-
-		const qel = document.getElementById('search-results');
-		if (qel) {
-			qel.innerHTML = '';
-		}
-		const q = document.getElementById('q');
-		if (q) {
-			// @ts-ignore
-			q.value = '';
-		}
 	}
 	onMount(() => {
 		// @ts-ignore
