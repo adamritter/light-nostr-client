@@ -98,7 +98,6 @@
 
 	let relayPool: RelayPool = new RelayPool(undefined, { logSubscriptions: true });
 	let metadataContent: MetadataContent;
-	$: metadataContent = parseJSON($info?.metadata?.content);
 	$: console.log(metadataContent);
 </script>
 
