@@ -246,6 +246,8 @@ export async function showNote(event: Event, metadata: Event | undefined, relayP
 	body.push(`<span>${content}</span><br>`);
 
 	// body.push(`${infoMetadata?.followerCount || 0}  followers<br></span></span>`);
+	body.push(`<span id="${event.id}comments"></span>`);
+	body.push(`<span id="${event.id}likes"></span>`);
 	body.push('</span></span>');
 	return body.join('');
 }
@@ -377,6 +379,52 @@ export async function handleEvent2(
 		const noteHtml = await showNote(event2, metadata, relayPool);
 		putUnder(event.id + 'holder', event2.id, noteHtml, redirectHolder);
 	});
+	showLikes(relayPool, event2);
+}
+
+function showLikes(relayPool: RelayPool, event: Event) {
+	const reactions = {};
+	relayPool.subscribe(
+		[{ '#e': [event.id], kinds: [7], limit: 100 }],
+		DEFAULT_RELAYS,
+		(reactionEvent: Event) => {
+			let reaction = reactionEvent.content;
+			if (reaction == '👍' || reaction == '+' || reaction == '👍🏻') {
+				reaction = '🤙';
+			}
+			if (!reactions[reaction]) {
+				reactions[reaction] = 0;
+			}
+			reactions[reaction]++;
+			const reactionEventDiv = document.getElementById(event.id + 'likes');
+			if (reactionEventDiv) {
+				reactionEventDiv.innerHTML = Object.keys(reactions)
+					.map((k) => k + ' ' + reactions[k])
+					.join(' ');
+			}
+		},
+		1000,
+		undefined,
+		{ unsubscribeOnEose: true }
+	);
+}
+
+function showComments(relayPool: RelayPool, event: Event) {
+	let comments = 0;
+	relayPool.subscribe(
+		[{ '#e': [event.id], kinds: [1], limit: 100 }],
+		DEFAULT_RELAYS,
+		(reactionEvent: Event) => {
+			comments++;
+			const commentsEventDiv = document.getElementById(event.id + 'comments');
+			if (commentsEventDiv) {
+				commentsEventDiv.innerHTML = '💬 ' + comments;
+			}
+		},
+		1000,
+		undefined,
+		{ unsubscribeOnEose: true }
+	);
 }
 
 export async function subscribeCallback(
@@ -388,7 +436,7 @@ export async function subscribeCallback(
 	redirectHolder: Map<string, string>,
 	counters: { num_events: number; num_event2s: number },
 	start: number,
-	relayPool: any
+	relayPool: RelayPool
 ) {
 	const eventIdWithContent = event.id + ' ' + event.content;
 	console.log('got event', eventIdWithContent);
@@ -438,6 +486,8 @@ export async function subscribeCallback(
 			undefined,
 			{ unsubscribeOnEose: true }
 		);
+		showLikes(relayPool, event);
+		showComments(relayPool, event);
 	}
 }
 
