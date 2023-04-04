@@ -374,11 +374,7 @@ export async function handleEvent2(
 		);
 	}
 	console.log('fetching metadata for ', event2.pubkey, event2IdWithContent);
-	relayPool.fetchAndCacheMetadata(event2.pubkey)?.then(async (metadata) => {
-		console.log('got metadata for event ', event2IdWithContent);
-		const noteHtml = await showNote(event2, metadata, relayPool);
-		putUnder(event.id + 'holder', event2.id, noteHtml, redirectHolder);
-	});
+	showNoteUnder(event.id + 'holder', event2, relayPool, redirectHolder);
 	showLikes(relayPool, event2);
 }
 
@@ -409,22 +405,51 @@ function showLikes(relayPool: RelayPool, event: Event) {
 	);
 }
 
-function showComments(relayPool: RelayPool, event: Event) {
-	let comments = 0;
+function showComments(relayPool: RelayPool, event: Event, redirectHolder: Map<string, string>) {
+	const comments: Event[] = [];
+	const expandComments = () => {
+		console.log('comments', comments);
+		const commentsEventDiv = document.getElementById(event.id + 'comments');
+		console.log('origid', commentsEventDiv?.id);
+		const holderId = commentsEventDiv.parentElement?.parentElement?.parentElement?.id;
+		console.log('holderId', holderId);
+		if (holderId) {
+			for (const comment of comments) {
+				showNoteUnder(holderId!, comment, relayPool, redirectHolder);
+			}
+		}
+		commentsEventDiv.innerHTML = '';
+	};
+
 	relayPool.subscribe(
 		[{ '#e': [event.id], kinds: [1], limit: 100 }],
 		DEFAULT_RELAYS,
 		(reactionEvent: Event) => {
-			comments++;
+			comments.push(reactionEvent);
 			const commentsEventDiv = document.getElementById(event.id + 'comments');
 			if (commentsEventDiv) {
-				commentsEventDiv.innerHTML = '💬 ' + comments;
+				commentsEventDiv.innerHTML = '💬 ' + comments.length;
+				commentsEventDiv.onclick = expandComments;
 			}
 		},
 		1000,
 		undefined,
 		{ unsubscribeOnEose: true }
 	);
+	const commentsEventDiv = document.getElementById(event.id + 'comments');
+	if (commentsEventDiv) {
+		commentsEventDiv.onclick = expandComments;
+	}
+}
+
+async function showNoteUnder(
+	holderid: string,
+	event: Event,
+	relayPool: RelayPool,
+	redirectHolder: Map<string, string>
+) {
+	const noteHtml = await showNote(event, undefined, relayPool);
+	putUnder(holderid, event.id, noteHtml, redirectHolder);
 }
 
 export async function subscribeCallback(
@@ -458,7 +483,6 @@ export async function subscribeCallback(
 	const eventDiv = document.getElementById('events');
 	if (eventDiv) {
 		console.log('adding event to div ', eventIdWithContent);
-		const noteHtml = await showNote(event, undefined, relayPool);
 		const existingEvent = document.getElementById(event.id);
 		const holderElement = createOrGetHolderElement(
 			eventDiv,
@@ -467,7 +491,7 @@ export async function subscribeCallback(
 			redirectHolder
 		);
 		const holderid = holderElement.id;
-		putUnder(holderid, event.id, noteHtml, redirectHolder);
+		showNoteUnder(holderid, event, relayPool, redirectHolder);
 		const idssub = relayPool.subscribeReferencedEventsAndPrefetchMetadata(
 			event,
 			(event2: any) => {
@@ -487,7 +511,7 @@ export async function subscribeCallback(
 			{ unsubscribeOnEose: true }
 		);
 		showLikes(relayPool, event);
-		showComments(relayPool, event);
+		showComments(relayPool, event, redirectHolder);
 	}
 }
 
