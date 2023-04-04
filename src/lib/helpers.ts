@@ -1,3 +1,5 @@
+const showLikesAndCommentsAfterMs = 2000;
+
 import { nip19 } from 'nostr-tools';
 import TimeAgo from 'javascript-time-ago';
 import type { Event } from 'nostr-tools';
@@ -346,7 +348,8 @@ export async function handleEvent2(
 	getLastPubKey: () => string,
 	redirectHolder: Map<string, string>,
 	counters: { num_event2s: number },
-	start2: number
+	start2: number,
+	index: number
 ) {
 	const eventIdWithContent = event.id + ' ' + event.content;
 	const event2IdWithContent = event2.id + ' ' + event2.content;
@@ -375,7 +378,13 @@ export async function handleEvent2(
 	}
 	console.log('fetching metadata for ', event2.pubkey, event2IdWithContent);
 	showNoteUnder(event.id + 'holder', event2, relayPool, redirectHolder);
-	showLikes(relayPool, event2);
+	if (index < 10) {
+		showLikes(relayPool, event2);
+	} else {
+		setTimeout(() => {
+			showLikes(relayPool, event2);
+		}, showLikesAndCommentsAfterMs);
+	}
 }
 
 function showLikes(relayPool: RelayPool, event: Event) {
@@ -399,7 +408,7 @@ function showLikes(relayPool: RelayPool, event: Event) {
 					.join(' ');
 			}
 		},
-		1000,
+		200,
 		undefined,
 		{ unsubscribeOnEose: true }
 	);
@@ -432,7 +441,7 @@ function showComments(relayPool: RelayPool, event: Event, redirectHolder: Map<st
 				commentsEventDiv.onclick = expandComments;
 			}
 		},
-		1000,
+		200,
 		undefined,
 		{ unsubscribeOnEose: true }
 	);
@@ -461,7 +470,8 @@ export async function subscribeCallback(
 	redirectHolder: Map<string, string>,
 	counters: { num_events: number; num_event2s: number },
 	start: number,
-	relayPool: RelayPool
+	relayPool: RelayPool,
+	index: number
 ) {
 	const eventIdWithContent = event.id + ' ' + event.content;
 	console.log('got event', eventIdWithContent);
@@ -503,15 +513,23 @@ export async function subscribeCallback(
 					getLastPubKey, // Use the function to get the latest lastPubKey value
 					redirectHolder,
 					counters,
-					start2
+					start2,
+					index
 				);
 			},
 			30,
 			undefined,
 			{ unsubscribeOnEose: true }
 		);
-		showLikes(relayPool, event);
-		showComments(relayPool, event, redirectHolder);
+		if (index < 10) {
+			showLikes(relayPool, event);
+			showComments(relayPool, event, redirectHolder);
+		} else {
+			setTimeout(() => {
+				showLikes(relayPool, event);
+				showComments(relayPool, event, redirectHolder);
+			}, showLikesAndCommentsAfterMs);
+		}
 	}
 }
 
@@ -523,10 +541,12 @@ export async function subscribeToEvents(
 	pubkey: string,
 	currentPubKeyFn: () => string
 ) {
+	let index = 0;
 	relayPool.subscribe(
 		[{ authors: [pubkey], kinds: [1], limit: 100 }],
 		undefined,
 		async (event, afterEose, url) => {
+			index++;
 			await subscribeCallback(
 				event,
 				afterEose,
@@ -536,7 +556,8 @@ export async function subscribeToEvents(
 				redirectHolder,
 				counters,
 				start,
-				relayPool
+				relayPool,
+				index
 			);
 		}
 	);
