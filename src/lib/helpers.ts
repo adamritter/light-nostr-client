@@ -185,13 +185,6 @@ export const escapeHtml = (unsafe: string) => {
 		.replaceAll("'", '&#039;');
 };
 
-export function selectRandom(array: any[], n: number) {
-	return array
-		.slice()
-		.sort(() => 0.5 - Math.random())
-		.slice(0, n);
-}
-
 export function getFinalRedirect(id: string, redirectHolders: Map<string, string>) {
 	while (redirectHolders.has(id)) {
 		id = redirectHolders.get(id)!;
@@ -199,11 +192,9 @@ export function getFinalRedirect(id: string, redirectHolders: Map<string, string
 	return id;
 }
 
-export async function showNote(event: Event, metadata: Event | undefined, relayPool: RelayPool) {
+export async function showNote(event: Event, relayPool: RelayPool) {
 	const pubkey = event.pubkey;
-	if (!metadata) {
-		metadata = await relayPool.fetchAndCacheMetadata(pubkey);
-	}
+	const metadata = await relayPool.fetchAndCacheMetadata(pubkey);
 	const infoMetadata = parseJSON(metadata?.content) as MetadataContent;
 	const body = [];
 	const picture = infoMetadata?.picture;
@@ -231,7 +222,11 @@ export async function showNote(event: Event, metadata: Event | undefined, relayP
 		body.push(` @${infoMetadata.name}`);
 	}
 	body.push(' ' + timeAgo.format(event.created_at * 1000, 'mini'));
-	body.push('<br></a>');
+	body.push(`</a>`);
+	body.push(
+		` <a onclick='console.log("log_event", ${escapeHtml(JSON.stringify(event))})'>[log]</a>`
+	);
+	body.push(`<br>`);
 
 	let content = escapeHtml(event.content).replaceAll('\n', '<br>');
 	// replace http and https with regexp
@@ -266,6 +261,7 @@ export function htmlToElement(html: string): HTMLElement {
 	return node as HTMLElement;
 }
 
+// the second element must be a holder, the first element can be a holder or an elementid
 function moveElements(from: string, to: string, holderRedirects: Map<string, string>) {
 	console.log('putUnder moveElements', from, to);
 	const fromHolder = document.getElementById(from);
@@ -279,6 +275,57 @@ function moveElements(from: string, to: string, holderRedirects: Map<string, str
 	}
 }
 
+function getHolderElementId(holderElementId: string, holderRedirects: Map<string, string>): string {
+	if (!holderElementId) {
+		return holderElementId;
+	}
+	while (holderRedirects.has(holderElementId)) {
+		holderElementId = holderRedirects.get(holderElementId)!;
+	}
+	return holderElementId;
+}
+
+function mergeHolders(holderId1: string, holderId2: string, holderRedirects: Map<string, string>) {
+	console.log('putUnder mergeHolders', holderId1, holderId2);
+	if (holderId1 === holderId2) {
+		return;
+	}
+	holderId1 = getHolderElementId(holderId1, holderRedirects);
+	holderId2 = getHolderElementId(holderId2, holderRedirects);
+	if (holderId1 === holderId2) {
+		return;
+	}
+	const holder1 = document.getElementById(holderId1);
+	const holder2 = document.getElementById(holderId2);
+	if (!holder1 || !holder2) {
+		console.error('holder not found', holderId1, holderId2, holder1, holder2);
+		return;
+	}
+	const holder1Score = parseFloat(holder1.style.order);
+	const holder2Score = parseFloat(holder2.style.order);
+	if (holder1Score > holder2Score) {
+		moveElements(holderId2, holderId1, holderRedirects);
+	} else {
+		moveElements(holderId1, holderId2, holderRedirects);
+	}
+}
+
+function addHolderRedirect(
+	holderElementId: string,
+	elementid: string,
+	holderRedirects: Map<string, string>
+) {
+	console.log('putUnder addHolderRedirect', holderElementId, elementid);
+	if (!holderElementId || !elementid) {
+		return;
+	}
+	if (holderRedirects.has(elementid)) {
+		mergeHolders(holderElementId, holderRedirects.get(elementid)!, holderRedirects);
+	} else {
+		holderRedirects.set(elementid, getHolderElementId(holderElementId, holderRedirects));
+	}
+}
+
 export function putUnder(
 	holderElementId: string,
 	elementid: string,
@@ -286,32 +333,13 @@ export function putUnder(
 	holderRedirects: Map<string, string>
 ) {
 	console.log('putUnder', holderElementId, elementid);
-	while (holderRedirects.has(holderElementId)) {
-		holderElementId = holderRedirects.get(holderElementId)!;
-	}
+	addHolderRedirect(holderElementId, elementid, holderRedirects);
 	const elementAlreadyExist = document.getElementById(elementid);
-	const holderElement = document.getElementById(holderElementId);
-	if (!holderElement) {
-		console.error('holderElement not found', holderElementId);
-		return;
-	}
 	if (elementAlreadyExist) {
-		const returnIfExist = false;
-		if (returnIfExist) {
-			return;
-		}
-		const holderAlreadyExistId = elementAlreadyExist.parentElement?.id;
-		if (holderAlreadyExistId && holderAlreadyExistId !== holderElementId) {
-			const holderAlreadyExistScore = parseFloat(elementAlreadyExist.parentElement.style.order);
-			const holderElementScore = parseFloat(holderElement.style.order);
-			if (holderAlreadyExistScore > holderElementScore) {
-				moveElements(holderElementId, holderAlreadyExistId, holderRedirects);
-			} else {
-				moveElements(holderAlreadyExistId, holderElementId, holderRedirects);
-			}
-		}
 		return;
 	}
+	holderElementId = getHolderElementId(holderElementId, holderRedirects);
+	const holderElement = document.getElementById(holderElementId);
 
 	if (holderElement) {
 		const element = htmlToElement(elementHTML);
@@ -326,9 +354,7 @@ export function createOrGetHolderElement(
 	score: number,
 	redirectHolder: Map<string, string>
 ): HTMLElement {
-	while (redirectHolder.has(holderId)) {
-		holderId = redirectHolder.get(holderId)!;
-	}
+	holderId = getFinalRedirect(holderId, redirectHolder);
 	const existingHolderElement = document.getElementById(holderId);
 	if (existingHolderElement) {
 		return existingHolderElement;
@@ -340,7 +366,9 @@ export function createOrGetHolderElement(
 	return holderElement;
 }
 
-export async function handleEvent2(
+const RECURSIVELY_LOAD_REPLIES = false;
+
+export async function handleRepliedToOrRootEvent(
 	event: Event,
 	event2: Event,
 	relayPool: RelayPool,
@@ -362,10 +390,10 @@ export async function handleEvent2(
 		console.log('pubkey != lastPubKey while trying to show event', event2IdWithContent);
 		return;
 	}
-	const found = event.tags.find((x) => x[1] == event2.id) ? true : false;
-	if (!found) {
-		throw new Error('event2 not found in event.tags ' + event2IdWithContent);
-	}
+	// const found = event.tags.find((x) => x[1] == event2.id) ? true : false;
+	// if (!found) {
+	// 	throw new Error('event2 not found in event.tags ' + event2IdWithContent);
+	// }
 
 	counters.num_event2s++;
 	if (counters.num_event2s % 100 == 0) {
@@ -384,6 +412,36 @@ export async function handleEvent2(
 		setTimeout(() => {
 			showLikes(relayPool, event2);
 		}, showLikesAndCommentsAfterMs);
+	}
+
+	// Merge referenced events if exist
+	for (const tag of event2.tags) {
+		if (tag[0] === 'e') {
+			const id = tag[1];
+			addHolderRedirect(event.id + 'holder', id, redirectHolder);
+		}
+	}
+
+	if (RECURSIVELY_LOAD_REPLIES) {
+		relayPool.subscribeReferencedEventsAndPrefetchMetadata(
+			event2,
+			(event3: any) => {
+				handleRepliedToOrRootEvent(
+					event,
+					event3,
+					relayPool,
+					pubkey,
+					getLastPubKey, // Use the function to get the latest lastPubKey value
+					redirectHolder,
+					counters,
+					start2,
+					index
+				);
+			},
+			30,
+			undefined,
+			{ unsubscribeOnEose: true }
+		);
 	}
 }
 
@@ -414,6 +472,8 @@ function showLikes(relayPool: RelayPool, event: Event) {
 	);
 }
 
+const onlyShowHiddenCommentsCount = true;
+
 function showComments(relayPool: RelayPool, event: Event, redirectHolder: Map<string, string>) {
 	const comments: Event[] = [];
 	const expandComments = () => {
@@ -434,6 +494,10 @@ function showComments(relayPool: RelayPool, event: Event, redirectHolder: Map<st
 		[{ '#e': [event.id], kinds: [1], limit: 100 }],
 		DEFAULT_RELAYS,
 		(reactionEvent: Event) => {
+			addHolderRedirect(event.id, reactionEvent, redirectHolder);
+			if (onlyShowHiddenCommentsCount && document.getElementById(reactionEvent.id)) {
+				return;
+			}
 			comments.push(reactionEvent);
 			const commentsEventDiv = document.getElementById(event.id + 'comments');
 			if (commentsEventDiv) {
@@ -457,7 +521,7 @@ async function showNoteUnder(
 	relayPool: RelayPool,
 	redirectHolder: Map<string, string>
 ) {
-	const noteHtml = await showNote(event, undefined, relayPool);
+	const noteHtml = await showNote(event, relayPool);
 	putUnder(holderid, event.id, noteHtml, redirectHolder);
 }
 
@@ -501,11 +565,21 @@ export async function subscribeCallback(
 			redirectHolder
 		);
 		const holderid = holderElement.id;
+		addHolderRedirect(holderid, event.id, redirectHolder);
 		showNoteUnder(holderid, event, relayPool, redirectHolder);
-		const idssub = relayPool.subscribeReferencedEventsAndPrefetchMetadata(
+
+		// Merge referenced events if exist
+		for (const tag of event.tags) {
+			if (tag[0] === 'e') {
+				const id = tag[1];
+				addHolderRedirect(holderid, id, redirectHolder);
+			}
+		}
+
+		relayPool.subscribeReferencedEventsAndPrefetchMetadata(
 			event,
 			(event2: any) => {
-				handleEvent2(
+				handleRepliedToOrRootEvent(
 					event,
 					event2,
 					relayPool,
