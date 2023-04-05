@@ -185,13 +185,6 @@ export const escapeHtml = (unsafe: string) => {
 		.replaceAll("'", '&#039;');
 };
 
-export function getFinalRedirect(id: string, redirectHolders: Map<string, string>) {
-	while (redirectHolders.has(id)) {
-		id = redirectHolders.get(id)!;
-	}
-	return id;
-}
-
 export async function showNote(event: Event, relayPool: RelayPool) {
 	const pubkey = event.pubkey;
 	const metadata = await relayPool.fetchAndCacheMetadata(pubkey);
@@ -285,6 +278,24 @@ function getHolderElementId(holderElementId: string, holderRedirects: Map<string
 	return holderElementId;
 }
 
+export function getFinalRedirect(id: string, redirectHolders: Map<string, string>) {
+	while (redirectHolders.has(id)) {
+		id = redirectHolders.get(id)!;
+	}
+	return id;
+}
+
+function updateScoreForHolder(id: string, score: number, holderRedirects: Map<string, string>) {
+	console.log('updateScoreForHolder', id, score);
+	const holder = document.getElementById(getHolderElementId(id, holderRedirects));
+	if (holder) {
+		const oldScore = parseFloat(holder.style.order);
+		if (oldScore > score) {
+			holder.style.order = score.toString();
+		}
+	}
+}
+
 function mergeHolders(holderId1: string, holderId2: string, holderRedirects: Map<string, string>) {
 	console.log('putUnder mergeHolders', holderId1, holderId2);
 	if (holderId1 === holderId2) {
@@ -357,6 +368,13 @@ export function createOrGetHolderElement(
 	holderId = getFinalRedirect(holderId, redirectHolder);
 	const existingHolderElement = document.getElementById(holderId);
 	if (existingHolderElement) {
+		console.log('createOrGetHolderElement: holder already exists');
+		// Update score
+		const oldScore = parseFloat(existingHolderElement.style.order);
+		if (oldScore < score) {
+			console.log('update score', holderId, oldScore, score);
+			existingHolderElement.style.order = score.toString();
+		}
 		return existingHolderElement;
 	}
 	const holderHtml = `<span id='${holderId}' style='border-bottom: solid white 2px; order: ${score}; display: flex;  flex-direction: column'></span>`;
@@ -567,6 +585,7 @@ export async function subscribeCallback(
 		const holderid = holderElement.id;
 		addHolderRedirect(holderid, event.id, redirectHolder);
 		showNoteUnder(holderid, event, relayPool, redirectHolder);
+		updateScoreForHolder(holderid, -event.created_at, redirectHolder);
 
 		// Merge referenced events if exist
 		for (const tag of event.tags) {
