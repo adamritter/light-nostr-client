@@ -342,15 +342,7 @@ export function putUnder(
 	elementHTML: string,
 	holderRedirects: Map<string, string>
 ) {
-	const eventDiv = document.getElementById('events')!;
-	const holderElement0 = createOrGetHolderElement(
-		eventDiv,
-		element.id + 'holder',
-		-element.created_at,
-		holderRedirects
-	);
-	const holderid = holderElement0.id;
-	addHolderRedirect(holderid, element.id, holderRedirects);
+	createOrGetHolderElement(element, holderRedirects);
 
 	const elementid = element.id;
 	const elementAlreadyExist = document.getElementById(elementid);
@@ -369,12 +361,13 @@ export function putUnder(
 }
 
 export function createOrGetHolderElement(
-	eventsElement: HTMLElement,
-	holderId: string,
-	score: number,
+	event: Event,
 	redirectHolder: Map<string, string>
 ): HTMLElement {
-	holderId = getFinalRedirect(holderId, redirectHolder);
+	const eventsElement = document.getElementById('events')!;
+	const score = -event.created_at;
+	const holderId = getFinalRedirect(event.id + 'holder', redirectHolder);
+	addHolderRedirect(holderId, event.id, redirectHolder);
 	const existingHolderElement = document.getElementById(holderId);
 	if (existingHolderElement) {
 		console.log('createOrGetHolderElement: holder already exists');
@@ -578,19 +571,9 @@ export async function subscribeCallback(
 		);
 	}
 	const start2 = performance.now();
-	const eventDiv = document.getElementById('events');
 	console.log('adding event to div ', eventIdWithContent);
-	const holderElement = createOrGetHolderElement(
-		eventDiv!,
-		event.id + 'holder',
-		-event.created_at,
-		redirectHolder
-	);
-	const holderid = holderElement.id;
-	addHolderRedirect(holderid, event.id, redirectHolder);
+	createOrGetHolderElement(event, redirectHolder);
 	showNoteUnder(event, relayPool, redirectHolder);
-	updateScoreForHolder(holderid, -event.created_at, redirectHolder);
-
 	redirectReferencedEvents(event, redirectHolder);
 
 	relayPool.subscribeReferencedEventsAndPrefetchMetadata(
