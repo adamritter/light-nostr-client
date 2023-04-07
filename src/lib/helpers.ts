@@ -338,18 +338,27 @@ function addHolderRedirect(
 }
 
 export function putUnder(
-	holderElementId: string,
-	elementid: string,
+	element: Event,
 	elementHTML: string,
 	holderRedirects: Map<string, string>
 ) {
-	console.log('putUnder', holderElementId, elementid);
-	addHolderRedirect(holderElementId, elementid, holderRedirects);
+	const eventDiv = document.getElementById('events')!;
+	const holderElement0 = createOrGetHolderElement(
+		eventDiv,
+		element.id + 'holder',
+		-element.created_at,
+		holderRedirects
+	);
+	const holderid = holderElement0.id;
+	addHolderRedirect(holderid, element.id, holderRedirects);
+
+	const elementid = element.id;
 	const elementAlreadyExist = document.getElementById(elementid);
 	if (elementAlreadyExist) {
 		return;
 	}
-	holderElementId = getHolderElementId(holderElementId, holderRedirects);
+	const holderElementId = getHolderElementId(elementid, holderRedirects);
+	console.log('putUnder', holderElementId, elementid);
 	const holderElement = document.getElementById(holderElementId);
 
 	if (holderElement) {
@@ -384,7 +393,7 @@ export function createOrGetHolderElement(
 	return holderElement;
 }
 
-const RECURSIVELY_LOAD_REPLIES = false;
+const RECURSIVELY_LOAD_REPLIES = true;
 
 export async function handleRepliedToOrRootEvent(
 	event: Event,
@@ -423,7 +432,7 @@ export async function handleRepliedToOrRootEvent(
 		);
 	}
 	console.log('fetching metadata for ', event2.pubkey, event2IdWithContent);
-	showNoteUnder(event.id + 'holder', event2, relayPool, redirectHolder);
+	showNoteUnder(event2, relayPool, redirectHolder);
 	if (index < 10) {
 		showLikes(relayPool, event2);
 	} else {
@@ -431,14 +440,7 @@ export async function handleRepliedToOrRootEvent(
 			showLikes(relayPool, event2);
 		}, showLikesAndCommentsAfterMs);
 	}
-
-	// Merge referenced events if exist
-	for (const tag of event2.tags) {
-		if (tag[0] === 'e') {
-			const id = tag[1];
-			addHolderRedirect(event.id + 'holder', id, redirectHolder);
-		}
-	}
+	redirectReferencedEvents(event, redirectHolder);
 
 	if (RECURSIVELY_LOAD_REPLIES) {
 		relayPool.subscribeReferencedEventsAndPrefetchMetadata(
@@ -492,18 +494,23 @@ function showLikes(relayPool: RelayPool, event: Event) {
 
 const onlyShowHiddenCommentsCount = true;
 
+function redirectReferencedEvents(event: Event, redirectHolder: Map<string, string>) {
+	for (const tag of event.tags) {
+		if (tag[0] === 'e') {
+			const id = tag[1];
+			addHolderRedirect(event.id, id, redirectHolder);
+		}
+	}
+}
+
 function showComments(relayPool: RelayPool, event: Event, redirectHolder: Map<string, string>) {
 	const comments: Event[] = [];
 	const expandComments = () => {
 		console.log('comments', comments);
 		const commentsEventDiv = document.getElementById(event.id + 'comments');
 		console.log('origid', commentsEventDiv?.id);
-		const holderId = commentsEventDiv.parentElement?.parentElement?.parentElement?.id;
-		console.log('holderId', holderId);
-		if (holderId) {
-			for (const comment of comments) {
-				showNoteUnder(holderId!, comment, relayPool, redirectHolder);
-			}
+		for (const comment of comments) {
+			showNoteUnder(comment, relayPool, redirectHolder);
 		}
 		commentsEventDiv.innerHTML = '';
 	};
@@ -512,7 +519,7 @@ function showComments(relayPool: RelayPool, event: Event, redirectHolder: Map<st
 		[{ '#e': [event.id], kinds: [1], limit: 100 }],
 		DEFAULT_RELAYS,
 		(reactionEvent: Event) => {
-			addHolderRedirect(event.id, reactionEvent, redirectHolder);
+			addHolderRedirect(event.id, reactionEvent.id, redirectHolder);
 			if (onlyShowHiddenCommentsCount && document.getElementById(reactionEvent.id)) {
 				return;
 			}
@@ -534,13 +541,12 @@ function showComments(relayPool: RelayPool, event: Event, redirectHolder: Map<st
 }
 
 async function showNoteUnder(
-	holderid: string,
 	event: Event,
 	relayPool: RelayPool,
 	redirectHolder: Map<string, string>
 ) {
 	const noteHtml = await showNote(event, relayPool);
-	putUnder(holderid, event.id, noteHtml, redirectHolder);
+	putUnder(event, noteHtml, redirectHolder);
 }
 
 export async function subscribeCallback(
@@ -573,56 +579,47 @@ export async function subscribeCallback(
 	}
 	const start2 = performance.now();
 	const eventDiv = document.getElementById('events');
-	if (eventDiv) {
-		console.log('adding event to div ', eventIdWithContent);
-		const existingEvent = document.getElementById(event.id);
-		const holderElement = createOrGetHolderElement(
-			eventDiv,
-			event.id + 'holder',
-			-event.created_at,
-			redirectHolder
-		);
-		const holderid = holderElement.id;
-		addHolderRedirect(holderid, event.id, redirectHolder);
-		showNoteUnder(holderid, event, relayPool, redirectHolder);
-		updateScoreForHolder(holderid, -event.created_at, redirectHolder);
+	console.log('adding event to div ', eventIdWithContent);
+	const holderElement = createOrGetHolderElement(
+		eventDiv!,
+		event.id + 'holder',
+		-event.created_at,
+		redirectHolder
+	);
+	const holderid = holderElement.id;
+	addHolderRedirect(holderid, event.id, redirectHolder);
+	showNoteUnder(event, relayPool, redirectHolder);
+	updateScoreForHolder(holderid, -event.created_at, redirectHolder);
 
-		// Merge referenced events if exist
-		for (const tag of event.tags) {
-			if (tag[0] === 'e') {
-				const id = tag[1];
-				addHolderRedirect(holderid, id, redirectHolder);
-			}
-		}
+	redirectReferencedEvents(event, redirectHolder);
 
-		relayPool.subscribeReferencedEventsAndPrefetchMetadata(
-			event,
-			(event2: any) => {
-				handleRepliedToOrRootEvent(
-					event,
-					event2,
-					relayPool,
-					pubkey,
-					getLastPubKey, // Use the function to get the latest lastPubKey value
-					redirectHolder,
-					counters,
-					start2,
-					index
-				);
-			},
-			30,
-			undefined,
-			{ unsubscribeOnEose: true }
-		);
-		if (index < 10) {
+	relayPool.subscribeReferencedEventsAndPrefetchMetadata(
+		event,
+		(event2: any) => {
+			handleRepliedToOrRootEvent(
+				event,
+				event2,
+				relayPool,
+				pubkey,
+				getLastPubKey, // Use the function to get the latest lastPubKey value
+				redirectHolder,
+				counters,
+				start2,
+				index
+			);
+		},
+		30,
+		undefined,
+		{ unsubscribeOnEose: true }
+	);
+	if (index < 10) {
+		showLikes(relayPool, event);
+		showComments(relayPool, event, redirectHolder);
+	} else {
+		setTimeout(() => {
 			showLikes(relayPool, event);
 			showComments(relayPool, event, redirectHolder);
-		} else {
-			setTimeout(() => {
-				showLikes(relayPool, event);
-				showComments(relayPool, event, redirectHolder);
-			}, showLikesAndCommentsAfterMs);
-		}
+		}, showLikesAndCommentsAfterMs);
 	}
 }
 
