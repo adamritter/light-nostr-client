@@ -1,4 +1,8 @@
 const showLikesAndCommentsAfterMs = 2000;
+const shouldShowComments = true;
+const shouldShowLikes = true;
+const mainEventCount = 100; // 100 is default
+const RECURSIVELY_LOAD_REPLIES = true;
 
 import { nip19 } from 'nostr-tools';
 import TimeAgo from 'javascript-time-ago';
@@ -7,6 +11,7 @@ import type { Event } from 'nostr-tools';
 // English.
 import en from 'javascript-time-ago/locale/en';
 import type { RelayPool } from 'nostr-relaypool';
+import { addHolderRedirect, putUnder } from './threads';
 TimeAgo.addLocale(en);
 
 // Create formatter (English).
@@ -185,7 +190,7 @@ export const escapeHtml = (unsafe: string) => {
 		.replaceAll("'", '&#039;');
 };
 
-export async function showNote(event: Event, relayPool: RelayPool) {
+export async function renderNote(event: Event, relayPool: RelayPool) {
 	const pubkey = event.pubkey;
 	const metadata = await relayPool.fetchAndCacheMetadata(pubkey);
 	const infoMetadata = parseJSON(metadata?.content) as MetadataContent;
@@ -216,6 +221,7 @@ export async function showNote(event: Event, relayPool: RelayPool) {
 	}
 	body.push(' ' + timeAgo.format(event.created_at * 1000, 'mini'));
 	body.push(`</a>`);
+	console.log('escapeHtml', event);
 	body.push(
 		` <a onclick='console.log("log_event", ${escapeHtml(JSON.stringify(event))})'>[log]</a>`
 	);
@@ -241,152 +247,6 @@ export async function showNote(event: Event, relayPool: RelayPool) {
 	body.push('</span></span>');
 	return body.join('');
 }
-
-/**
- * @param {String} HTML representing a single element
- * @return {Element}
- */
-export function htmlToElement(html: string): HTMLElement {
-	const template = document.createElement('template');
-	html = html.trim(); // Never return a text node of whitespace as the result
-	template.innerHTML = html;
-	const node = template.content.firstChild;
-	return node as HTMLElement;
-}
-
-// the second element must be a holder, the first element can be a holder or an elementid
-function moveElements(from: string, to: string, holderRedirects: Map<string, string>) {
-	console.log('putUnder moveElements', from, to);
-	const fromHolder = document.getElementById(from);
-	const toHolder = document.getElementById(to);
-	if (fromHolder && toHolder) {
-		holderRedirects.set(from, to);
-		while (fromHolder.firstChild) {
-			toHolder.appendChild(fromHolder.firstChild);
-		}
-		fromHolder.remove();
-	}
-}
-
-function getHolderElementId(holderElementId: string, holderRedirects: Map<string, string>): string {
-	if (!holderElementId) {
-		return holderElementId;
-	}
-	while (holderRedirects.has(holderElementId)) {
-		holderElementId = holderRedirects.get(holderElementId)!;
-	}
-	return holderElementId;
-}
-
-export function getFinalRedirect(id: string, redirectHolders: Map<string, string>) {
-	while (redirectHolders.has(id)) {
-		id = redirectHolders.get(id)!;
-	}
-	return id;
-}
-
-function updateScoreForHolder(id: string, score: number, holderRedirects: Map<string, string>) {
-	console.log('updateScoreForHolder', id, score);
-	const holder = document.getElementById(getHolderElementId(id, holderRedirects));
-	if (holder) {
-		const oldScore = parseFloat(holder.style.order);
-		if (oldScore > score) {
-			holder.style.order = score.toString();
-		}
-	}
-}
-
-function mergeHolders(holderId1: string, holderId2: string, holderRedirects: Map<string, string>) {
-	console.log('putUnder mergeHolders', holderId1, holderId2);
-	if (holderId1 === holderId2) {
-		return;
-	}
-	holderId1 = getHolderElementId(holderId1, holderRedirects);
-	holderId2 = getHolderElementId(holderId2, holderRedirects);
-	if (holderId1 === holderId2) {
-		return;
-	}
-	const holder1 = document.getElementById(holderId1);
-	const holder2 = document.getElementById(holderId2);
-	if (!holder1 || !holder2) {
-		console.error('holder not found', holderId1, holderId2, holder1, holder2);
-		return;
-	}
-	const holder1Score = parseFloat(holder1.style.order);
-	const holder2Score = parseFloat(holder2.style.order);
-	if (holder1Score > holder2Score) {
-		moveElements(holderId2, holderId1, holderRedirects);
-	} else {
-		moveElements(holderId1, holderId2, holderRedirects);
-	}
-}
-
-function addHolderRedirect(
-	holderElementId: string,
-	elementid: string,
-	holderRedirects: Map<string, string>
-) {
-	console.log('putUnder addHolderRedirect', holderElementId, elementid);
-	if (!holderElementId || !elementid) {
-		return;
-	}
-	if (holderRedirects.has(elementid)) {
-		mergeHolders(holderElementId, holderRedirects.get(elementid)!, holderRedirects);
-	} else {
-		holderRedirects.set(elementid, getHolderElementId(holderElementId, holderRedirects));
-	}
-}
-
-export function putUnder(
-	element: Event,
-	elementHTML: string,
-	holderRedirects: Map<string, string>
-) {
-	createOrGetHolderElement(element, holderRedirects);
-
-	const elementid = element.id;
-	const elementAlreadyExist = document.getElementById(elementid);
-	if (elementAlreadyExist) {
-		return;
-	}
-	const holderElementId = getHolderElementId(elementid, holderRedirects);
-	console.log('putUnder', holderElementId, elementid);
-	const holderElement = document.getElementById(holderElementId);
-
-	if (holderElement) {
-		const element = htmlToElement(elementHTML);
-		element.id = elementid;
-		holderElement.appendChild(element);
-	}
-}
-
-export function createOrGetHolderElement(
-	event: Event,
-	redirectHolder: Map<string, string>
-): HTMLElement {
-	const eventsElement = document.getElementById('events')!;
-	const score = -event.created_at;
-	const holderId = getFinalRedirect(event.id + 'holder', redirectHolder);
-	addHolderRedirect(holderId, event.id, redirectHolder);
-	const existingHolderElement = document.getElementById(holderId);
-	if (existingHolderElement) {
-		console.log('createOrGetHolderElement: holder already exists');
-		// Update score
-		const oldScore = parseFloat(existingHolderElement.style.order);
-		if (oldScore < score) {
-			console.log('update score', holderId, oldScore, score);
-			existingHolderElement.style.order = score.toString();
-		}
-		return existingHolderElement;
-	}
-	const holderHtml = `<span id='${holderId}' style='border-bottom: solid white 2px; order: ${score}; display: flex;  flex-direction: column'></span>`;
-	const holderElement = htmlToElement(holderHtml);
-	eventsElement.appendChild(holderElement);
-
-	return holderElement;
-}
-
-const RECURSIVELY_LOAD_REPLIES = true;
 
 export async function handleRepliedToOrRootEvent(
 	event: Event,
@@ -425,7 +285,7 @@ export async function handleRepliedToOrRootEvent(
 		);
 	}
 	console.log('fetching metadata for ', event2.pubkey, event2IdWithContent);
-	showNoteUnder(event2, relayPool, redirectHolder);
+	showNote(event2, relayPool, redirectHolder);
 	if (index < 10) {
 		showLikes(relayPool, event2);
 	} else {
@@ -453,12 +313,15 @@ export async function handleRepliedToOrRootEvent(
 			},
 			30,
 			undefined,
-			{ unsubscribeOnEose: true }
+			{ unsubscribeOnEose: true, defaultRelays: DEFAULT_RELAYS }
 		);
 	}
 }
 
 function showLikes(relayPool: RelayPool, event: Event) {
+	if (!shouldShowLikes) {
+		return;
+	}
 	const reactions = {};
 	relayPool.subscribe(
 		[{ '#e': [event.id], kinds: [7], limit: 100 }],
@@ -497,15 +360,18 @@ function redirectReferencedEvents(event: Event, redirectHolder: Map<string, stri
 }
 
 function showComments(relayPool: RelayPool, event: Event, redirectHolder: Map<string, string>) {
+	if (!shouldShowComments) {
+		return;
+	}
 	const comments: Event[] = [];
 	const expandComments = () => {
 		console.log('comments', comments);
 		const commentsEventDiv = document.getElementById(event.id + 'comments');
 		console.log('origid', commentsEventDiv?.id);
 		for (const comment of comments) {
-			showNoteUnder(comment, relayPool, redirectHolder);
+			showNote(comment, relayPool, redirectHolder);
 		}
-		commentsEventDiv.innerHTML = '';
+		commentsEventDiv!.innerHTML = '';
 	};
 
 	relayPool.subscribe(
@@ -533,13 +399,52 @@ function showComments(relayPool: RelayPool, event: Event, redirectHolder: Map<st
 	}
 }
 
-async function showNoteUnder(
-	event: Event,
-	relayPool: RelayPool,
-	redirectHolder: Map<string, string>
-) {
-	const noteHtml = await showNote(event, relayPool);
-	putUnder(event, noteHtml, redirectHolder);
+async function showNote(event: Event, relayPool: RelayPool, redirectHolder: Map<string, string>) {
+	const noteHtml = await renderNote(event, relayPool);
+	putUnder(event.id, -event.created_at, noteHtml, redirectHolder);
+}
+
+/*
+Why not get back aa? [["e","6d99b2965b58492597476d65a63ed2e6fb68b498a05c2668bfcd9fe7b7e7a12a","","root"],["e","aa350f6dafe9255eddfa2f05803aa594eef379c15f079e3b0bf86c9816d445b4","","reply"],["p","bf943b7165fca616a483c6dc701646a29689ab671110fcddba12a3a5894cda15"],["p","ea64386dba380b76c86f671f2f3c5b2a93febe8d3e2e968ac26f33569da36f87"],["p","0f22c06eac1002684efcc68f568540e8342d1609d508bcd4312c038e6194f8b6"],["p","6f32dddf2d54f2c5e64e1570abcb9c7a05e8041bac0ee9f4235f694fccb68b5d"],["p","4523be58d395b1b196a9b8c82b038b6895cb02b683d0c253a955068dba1facd0"],["p","4523be58d395b1b196a9b8c82b038b6895cb02b683d0c253a955068dba1facd0"],["p","489ac583fc30cfbee0095dd736ec46468faa8b187e311fda6269c4e18284ed0c"]]
+*/
+
+function simpleTest(relayPool: RelayPool) {
+	console.log('simpleTest');
+	const event = {
+		content:
+			'Fair enough. I hope ECDH can be added to window.nostr at some point. You could still send invites, but it would also allow you to operate in stealth mode if you want.',
+		created_at: 1679991993,
+		id: 'c6bc969e50c0f373b4615ad46feec465132f6c3c8963d94e666ea2b5573be6bf',
+		kind: 1,
+		pubkey: '4523be58d395b1b196a9b8c82b038b6895cb02b683d0c253a955068dba1facd0',
+		sig: '7ebfcafe91a73ed85f6b3d72be32fbbcd0ba39964c7d639824edfe7cf579dcf3c0600bcf4a24956bf28dacf0fe1c9da371b7106acc87409ca145ce9325871846',
+		tags: [
+			['e', '6d99b2965b58492597476d65a63ed2e6fb68b498a05c2668bfcd9fe7b7e7a12a', '', 'root'],
+			['e', 'aa350f6dafe9255eddfa2f05803aa594eef379c15f079e3b0bf86c9816d445b4', '', 'reply'],
+			['p', 'bf943b7165fca616a483c6dc701646a29689ab671110fcddba12a3a5894cda15'],
+			['p', 'ea64386dba380b76c86f671f2f3c5b2a93febe8d3e2e968ac26f33569da36f87'],
+			['p', '0f22c06eac1002684efcc68f568540e8342d1609d508bcd4312c038e6194f8b6'],
+			['p', '6f32dddf2d54f2c5e64e1570abcb9c7a05e8041bac0ee9f4235f694fccb68b5d'],
+			['p', '4523be58d395b1b196a9b8c82b038b6895cb02b683d0c253a955068dba1facd0'],
+			['p', '4523be58d395b1b196a9b8c82b038b6895cb02b683d0c253a955068dba1facd0'],
+			['p', '489ac583fc30cfbee0095dd736ec46468faa8b187e311fda6269c4e18284ed0c']
+		]
+	};
+	relayPool.subscribeReferencedEvents(event, (event2) => {
+		console.log('got event2 from simpletest', event2);
+	});
+	relayPool.subscribe(
+		[
+			{
+				ids: ['aa350f6dafe9255eddfa2f05803aa594eef379c15f079e3b0bf86c9816d445b4'],
+				authors: ['489ac583fc30cfbee0095dd736ec46468faa8b187e311fda6269c4e18284ed0c']
+			}
+		],
+		undefined,
+		(event2) => {
+			console.log('got event4 from simpletest', event2);
+		}
+	);
 }
 
 export async function subscribeCallback(
@@ -555,7 +460,10 @@ export async function subscribeCallback(
 	index: number
 ) {
 	const eventIdWithContent = event.id + ' ' + event.content;
-	console.log('got event', eventIdWithContent);
+	if (event.relays) {
+		throw new Error('event.relays should not be set');
+	}
+	console.log('got event', eventIdWithContent, 'tags: ', JSON.stringify(event.tags));
 	if (pubkey != getLastPubKey()) {
 		console.log('pubkey != lastPubKey while trying to show event', eventIdWithContent);
 		return;
@@ -572,13 +480,23 @@ export async function subscribeCallback(
 	}
 	const start2 = performance.now();
 	console.log('adding event to div ', eventIdWithContent);
-	createOrGetHolderElement(event, redirectHolder);
-	showNoteUnder(event, relayPool, redirectHolder);
+	// createOrGetHolderElement(event.id, -event.created_at, redirectHolder);
+	showNote(event, relayPool, redirectHolder);
 	redirectReferencedEvents(event, redirectHolder);
+	console.log(
+		'calling subscribeReferencedEventsAndPrefetchMetadata, event: ',
+		JSON.stringify(event)
+	);
 
 	relayPool.subscribeReferencedEventsAndPrefetchMetadata(
 		event,
 		(event2: any) => {
+			console.log(
+				'subscribeReferencedEventsAndPrefetchMetadata got event2',
+				event2.id,
+				event2.content,
+				JSON.stringify(event2.tags)
+			);
 			handleRepliedToOrRootEvent(
 				event,
 				event2,
@@ -593,7 +511,7 @@ export async function subscribeCallback(
 		},
 		30,
 		undefined,
-		{ unsubscribeOnEose: true }
+		{ unsubscribeOnEose: true, defaultRelays: DEFAULT_RELAYS }
 	);
 	if (index < 10) {
 		showLikes(relayPool, event);
@@ -614,12 +532,17 @@ export async function subscribeToEvents(
 	pubkey: string,
 	currentPubKeyFn: () => string
 ) {
+	// simpleTest(relayPool);
+	// return;
 	let index = 0;
 	relayPool.subscribe(
-		[{ authors: [pubkey], kinds: [1], limit: 100 }],
+		[{ authors: [pubkey], kinds: [1], limit: mainEventCount }],
 		undefined,
 		async (event, afterEose, url) => {
 			index++;
+			if (event.relays) {
+				throw new Error('event.relays should not be set');
+			}
 			await subscribeCallback(
 				event,
 				afterEose,
@@ -632,6 +555,9 @@ export async function subscribeToEvents(
 				relayPool,
 				index
 			);
-		}
+		},
+		undefined,
+		undefined,
+		{ defaultRelays: DEFAULT_RELAYS }
 	);
 }
