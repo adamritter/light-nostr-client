@@ -46,17 +46,17 @@ function moveElements(from: string, to: string, eventRedirects: Map<string, stri
 }
 
 function mergeHolders(holderId1: string, holderId2: string, eventRedirects: Map<string, string>) {
-	console.log('putUnder mergeHolders', holderId1, holderId2);
 	if (holderId1 === holderId2) {
 		return;
 	}
-	holderId1 = getFinalElementId(holderId1, eventRedirects);
-	holderId2 = getFinalElementId(holderId2, eventRedirects);
+	// console.log('putUnder mergeHolders', holderId1, holderId2);
+	holderId1 = getFinalElementId(holderId1, eventRedirects) + '_holder';
+	holderId2 = getFinalElementId(holderId2, eventRedirects) + '_holder';
 	if (holderId1 === holderId2) {
 		return;
 	}
-	const holder1 = document.getElementById(holderId1 + '_holder');
-	const holder2 = document.getElementById(holderId2 + '_holder');
+	const holder1 = document.getElementById(holderId1);
+	const holder2 = document.getElementById(holderId2);
 	if (!holder1) {
 		eventRedirects.set(holderId1, holderId2);
 		assertNoInfiniteLoop(eventRedirects);
@@ -81,7 +81,7 @@ export function addHolderRedirect(
 	elementid: string,
 	eventRedirects: Map<string, string>
 ) {
-	console.log('putUnder addEventRedirect', holderElementId, elementid);
+	// console.log('putUnder addEventRedirect', holderElementId, elementid);
 	if (!holderElementId || !elementid) {
 		return;
 	}
@@ -117,11 +117,11 @@ export function createOrGetHolderElement(
 	const holderElementId = getFinalElementId(eventId, eventRedirects) + '_holder';
 	const existingHolderElement = document.getElementById(holderElementId);
 	if (existingHolderElement) {
-		console.log('createOrGetHolderElement: holder already exists' + holderElementId);
+		// console.log('createOrGetHolderElement: holder already exists ' + holderElementId);
 		// Update score
 		const oldScore = parseFloat(existingHolderElement.style.order);
-		if (oldScore < score) {
-			console.log('update score', holderElementId, oldScore, score);
+		if (oldScore > score) {
+			// console.log('update score', holderElementId, oldScore, score);
 			existingHolderElement.style.order = score.toString();
 		}
 		return existingHolderElement;

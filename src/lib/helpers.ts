@@ -2,7 +2,7 @@ const showLikesAndCommentsAfterMs = 2000;
 const shouldShowComments = true;
 const shouldShowLikes = true;
 const mainEventCount = 100; // 100 is default
-const viewAsMainEventCount = 20;
+const viewAsMainEventCount = 5;
 const RECURSIVELY_LOAD_REPLIES = true;
 
 import { nip19 } from 'nostr-tools';
@@ -155,7 +155,7 @@ export function profileForInfoMetadata(
 		body.push(
 			`<a onclick='load(
                 "${pubkey}"
-            )'><img src='${picture}' style='border-radius: 50%; cursor: pointer; max-height: 60px); max-width: 60px;' width=60 height=60></a><br>`
+            )'><img src='https://imgproxy.iris.to/insecure/rs:fill:80:80/plain/${picture}' style='border-radius: 50%; cursor: pointer; max-height: 60px); max-width: 60px;' width=60 height=60></a><br>`
 		);
 	} else {
 		// just leave 60px
@@ -204,7 +204,7 @@ export async function renderNote(event: Event, relayPool: RelayPool) {
 		body.push(
 			`<a onclick='load(
 				"${pubkey}"
-			)'><img src='${picture}' style='border-radius: 50%; cursor: pointer; max-height:30px; max-width: 30px;' width=60 height=60></a><br>`
+			)'><img src='https://imgproxy.iris.to/insecure/rs:fill:80:80/plain/${picture}' style='border-radius: 50%; cursor: pointer; max-height:30px; max-width: 30px;' width=60 height=60></a><br>`
 		);
 	} else {
 		// just leave 60px
@@ -222,7 +222,7 @@ export async function renderNote(event: Event, relayPool: RelayPool) {
 	}
 	body.push(' ' + timeAgo.format(event.created_at * 1000, 'mini'));
 	body.push(`</a>`);
-	console.log('escapeHtml', event);
+	// console.log('escapeHtml', event);
 	body.push(
 		` <a onclick='console.log("log_event", ${escapeHtml(JSON.stringify(event))})'>[log]</a>`
 	);
@@ -262,7 +262,7 @@ export async function handleRepliedToOrRootEvent(
 ) {
 	const eventIdWithContent = event.id + ' ' + event.content;
 	const event2IdWithContent = event2.id + ' ' + event2.content;
-	console.log('event2', event2IdWithContent, ' for event ', eventIdWithContent);
+	// console.log('event2', event2IdWithContent, ' for event ', eventIdWithContent);
 	if (event2.kind != 1) {
 		console.log('kind != 1 for event2 ', event2.id);
 		return;
