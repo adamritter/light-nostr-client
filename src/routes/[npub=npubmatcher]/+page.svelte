@@ -10,10 +10,6 @@
 	import { writable } from 'svelte/store';
 	import type { Event } from 'nostr-tools';
 	import { RelayPool } from 'nostr-relaypool';
-	import TimeAgo from 'javascript-time-ago';
-
-	// English.
-	import en from 'javascript-time-ago/locale/en';
 	import {
 		fetchInfo,
 		npubDecode,
@@ -24,10 +20,8 @@
 		type MetadataContent,
 		subscribeToEvents
 	} from '../../lib/helpers';
-	TimeAgo.addLocale(en);
 
-	// Create formatter (English).
-	const timeAgo = new TimeAgo('en-US');
+	let viewAs = false;
 
 	let info = writable<{
 		metadata: Event;
@@ -41,10 +35,11 @@
 	const counters = { num_events: 0, num_event2s: 0 };
 
 	let lastPubKey: string;
+	let lastViewAs: boolean;
 	let redirectHolder: Map<string, string> = new Map();
 
-	export async function load(pubkey: string) {
-		if (pubkey === lastPubKey) {
+	export async function load(pubkey: string, viewAs: boolean) {
+		if (pubkey === lastPubKey && viewAs === lastViewAs) {
 			return;
 		}
 		if (metadataContent) {
@@ -52,6 +47,7 @@
 		}
 		redirectHolder = new Map();
 		lastPubKey = pubkey;
+		lastViewAs = viewAs;
 		window.history.pushState(pubkey, pubkey, `/${npubEncode(pubkey)}`);
 		writableMetadataPromise.set(relayPool.fetchAndCacheMetadata(pubkey));
 
@@ -59,7 +55,15 @@
 
 		let e = document?.getElementById?.('events');
 		e?.replaceChildren();
-		subscribeToEvents(relayPool, redirectHolder, counters, start, pubkey, () => lastPubKey);
+		subscribeToEvents(
+			relayPool,
+			redirectHolder,
+			counters,
+			start,
+			pubkey,
+			() => pubkey !== lastPubKey || viewAs !== lastViewAs,
+			viewAs
+		);
 		relayPool.fetchAndCacheMetadata(pubkey).then((metadata) => {
 			if (pubkey === lastPubKey) {
 				metadataContent = parseJSON(metadata.content);
@@ -88,7 +92,7 @@
 		window.load = load;
 		const npub = document.location.href.replace(/.*\/npub/, 'npub');
 		if (npub.length > 4) {
-			load(npubDecode(npub));
+			load(npubDecode(npub), viewAs);
 		}
 		// load('6e3f51664e19e082df5217fd4492bb96907405a0b27028671dd7f297b688608c');
 	});
@@ -156,8 +160,14 @@
 		</span>
 	</span>
 {/if}
-<!-- {/if} -->
-<!-- {/await} -->
+
+<label for="viewas">View as</label>
+<input
+	type="checkbox"
+	id="viewas"
+	bind:checked={viewAs}
+	on:change={() => load(lastPubKey, viewAs)}
+/>
 
 <span
 	id="eventsandinfo"

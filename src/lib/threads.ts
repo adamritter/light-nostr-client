@@ -55,8 +55,8 @@ function mergeHolders(holderId1: string, holderId2: string, eventRedirects: Map<
 	if (holderId1 === holderId2) {
 		return;
 	}
-	const holder1 = document.getElementById(holderId1);
-	const holder2 = document.getElementById(holderId2);
+	const holder1 = document.getElementById(holderId1 + '_holder');
+	const holder2 = document.getElementById(holderId2 + '_holder');
 	if (!holder1) {
 		eventRedirects.set(holderId1, holderId2);
 		assertNoInfiniteLoop(eventRedirects);
@@ -146,6 +146,7 @@ export function putUnder(
 	}
 	const holderElement = createOrGetHolderElement(eventId, score, eventRedirects);
 	const element = htmlToElement(elementHTML);
+	console.log('putUnder: add element', eventId, element.id, holderElement.id);
 	element.id = eventId;
 	holderElement.appendChild(element);
 }

@@ -2,6 +2,7 @@ const showLikesAndCommentsAfterMs = 2000;
 const shouldShowComments = true;
 const shouldShowLikes = true;
 const mainEventCount = 100; // 100 is default
+const viewAsMainEventCount = 20;
 const RECURSIVELY_LOAD_REPLIES = true;
 
 import { nip19 } from 'nostr-tools';
@@ -253,7 +254,7 @@ export async function handleRepliedToOrRootEvent(
 	event2: Event,
 	relayPool: RelayPool,
 	pubkey: string,
-	getLastPubKey: () => string,
+	cancelled: () => boolean,
 	redirectHolder: Map<string, string>,
 	counters: { num_event2s: number },
 	start2: number,
@@ -266,8 +267,8 @@ export async function handleRepliedToOrRootEvent(
 		console.log('kind != 1 for event2 ', event2.id);
 		return;
 	}
-	if (pubkey != getLastPubKey()) {
-		console.log('pubkey != lastPubKey while trying to show event', event2IdWithContent);
+	if (cancelled()) {
+		console.log('cancelled while trying to show event', event2IdWithContent);
 		return;
 	}
 	// const found = event.tags.find((x) => x[1] == event2.id) ? true : false;
@@ -304,7 +305,7 @@ export async function handleRepliedToOrRootEvent(
 					event3,
 					relayPool,
 					pubkey,
-					getLastPubKey, // Use the function to get the latest lastPubKey value
+					cancelled,
 					redirectHolder,
 					counters,
 					start2,
@@ -452,7 +453,7 @@ export async function subscribeCallback(
 	afterEose: any,
 	url: string | undefined,
 	pubkey: string,
-	getLastPubKey: () => string,
+	cancelled: () => boolean,
 	redirectHolder: Map<string, string>,
 	counters: { num_events: number; num_event2s: number },
 	start: number,
@@ -464,8 +465,8 @@ export async function subscribeCallback(
 		throw new Error('event.relays should not be set');
 	}
 	console.log('got event', eventIdWithContent, 'tags: ', JSON.stringify(event.tags));
-	if (pubkey != getLastPubKey()) {
-		console.log('pubkey != lastPubKey while trying to show event', eventIdWithContent);
+	if (cancelled()) {
+		console.log('cancelled while trying to show event', eventIdWithContent);
 		return;
 	}
 	counters.num_events++;
@@ -480,7 +481,6 @@ export async function subscribeCallback(
 	}
 	const start2 = performance.now();
 	console.log('adding event to div ', eventIdWithContent);
-	// createOrGetHolderElement(event.id, -event.created_at, redirectHolder);
 	showNote(event, relayPool, redirectHolder);
 	redirectReferencedEvents(event, redirectHolder);
 	console.log(
@@ -502,7 +502,7 @@ export async function subscribeCallback(
 				event2,
 				relayPool,
 				pubkey,
-				getLastPubKey, // Use the function to get the latest lastPubKey value
+				cancelled,
 				redirectHolder,
 				counters,
 				start2,
@@ -530,16 +530,24 @@ export async function subscribeToEvents(
 	counters: { num_events: number; num_event2s: number },
 	start: number,
 	pubkey: string,
-	currentPubKeyFn: () => string
+	cancelled: () => boolean,
+	viewAs: boolean
 ) {
-	// simpleTest(relayPool);
-	// return;
+	let authors = [pubkey];
+	let thisMainEventCount = mainEventCount;
+	if (viewAs) {
+		authors = (await relayPool.fetchAndCacheContactList(pubkey)).tags
+			.filter((tag: any) => tag[0] == 'p')
+			.map((tag: any) => tag[1]);
+		thisMainEventCount = viewAsMainEventCount;
+	}
 	let index = 0;
 	relayPool.subscribe(
-		[{ authors: [pubkey], kinds: [1], limit: mainEventCount }],
+		[{ authors, kinds: [1], limit: thisMainEventCount }],
 		undefined,
 		async (event, afterEose, url) => {
 			index++;
+			// @ts-ignore
 			if (event.relays) {
 				throw new Error('event.relays should not be set');
 			}
@@ -548,7 +556,7 @@ export async function subscribeToEvents(
 				afterEose,
 				url,
 				pubkey,
-				currentPubKeyFn, // Pass a function to get the current pubkey value
+				cancelled,
 				redirectHolder,
 				counters,
 				start,
