@@ -405,49 +405,6 @@ async function showNote(event: Event, relayPool: RelayPool, redirectHolder: Map<
 	putUnder(event.id, -event.created_at, noteHtml, redirectHolder);
 }
 
-/*
-Why not get back aa? [["e","6d99b2965b58492597476d65a63ed2e6fb68b498a05c2668bfcd9fe7b7e7a12a","","root"],["e","aa350f6dafe9255eddfa2f05803aa594eef379c15f079e3b0bf86c9816d445b4","","reply"],["p","bf943b7165fca616a483c6dc701646a29689ab671110fcddba12a3a5894cda15"],["p","ea64386dba380b76c86f671f2f3c5b2a93febe8d3e2e968ac26f33569da36f87"],["p","0f22c06eac1002684efcc68f568540e8342d1609d508bcd4312c038e6194f8b6"],["p","6f32dddf2d54f2c5e64e1570abcb9c7a05e8041bac0ee9f4235f694fccb68b5d"],["p","4523be58d395b1b196a9b8c82b038b6895cb02b683d0c253a955068dba1facd0"],["p","4523be58d395b1b196a9b8c82b038b6895cb02b683d0c253a955068dba1facd0"],["p","489ac583fc30cfbee0095dd736ec46468faa8b187e311fda6269c4e18284ed0c"]]
-*/
-
-function simpleTest(relayPool: RelayPool) {
-	console.log('simpleTest');
-	const event = {
-		content:
-			'Fair enough. I hope ECDH can be added to window.nostr at some point. You could still send invites, but it would also allow you to operate in stealth mode if you want.',
-		created_at: 1679991993,
-		id: 'c6bc969e50c0f373b4615ad46feec465132f6c3c8963d94e666ea2b5573be6bf',
-		kind: 1,
-		pubkey: '4523be58d395b1b196a9b8c82b038b6895cb02b683d0c253a955068dba1facd0',
-		sig: '7ebfcafe91a73ed85f6b3d72be32fbbcd0ba39964c7d639824edfe7cf579dcf3c0600bcf4a24956bf28dacf0fe1c9da371b7106acc87409ca145ce9325871846',
-		tags: [
-			['e', '6d99b2965b58492597476d65a63ed2e6fb68b498a05c2668bfcd9fe7b7e7a12a', '', 'root'],
-			['e', 'aa350f6dafe9255eddfa2f05803aa594eef379c15f079e3b0bf86c9816d445b4', '', 'reply'],
-			['p', 'bf943b7165fca616a483c6dc701646a29689ab671110fcddba12a3a5894cda15'],
-			['p', 'ea64386dba380b76c86f671f2f3c5b2a93febe8d3e2e968ac26f33569da36f87'],
-			['p', '0f22c06eac1002684efcc68f568540e8342d1609d508bcd4312c038e6194f8b6'],
-			['p', '6f32dddf2d54f2c5e64e1570abcb9c7a05e8041bac0ee9f4235f694fccb68b5d'],
-			['p', '4523be58d395b1b196a9b8c82b038b6895cb02b683d0c253a955068dba1facd0'],
-			['p', '4523be58d395b1b196a9b8c82b038b6895cb02b683d0c253a955068dba1facd0'],
-			['p', '489ac583fc30cfbee0095dd736ec46468faa8b187e311fda6269c4e18284ed0c']
-		]
-	};
-	relayPool.subscribeReferencedEvents(event, (event2) => {
-		console.log('got event2 from simpletest', event2);
-	});
-	relayPool.subscribe(
-		[
-			{
-				ids: ['aa350f6dafe9255eddfa2f05803aa594eef379c15f079e3b0bf86c9816d445b4'],
-				authors: ['489ac583fc30cfbee0095dd736ec46468faa8b187e311fda6269c4e18284ed0c']
-			}
-		],
-		undefined,
-		(event2) => {
-			console.log('got event4 from simpletest', event2);
-		}
-	);
-}
-
 export async function subscribeCallback(
 	event: any,
 	afterEose: any,
