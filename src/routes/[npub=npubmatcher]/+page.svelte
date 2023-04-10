@@ -122,7 +122,12 @@
 			<span style="width: 60px" />
 		{/if}
 		<span>
-			<a on:click={() => load($info.metadata.pubkey)}>
+			<a
+				on:click={() => {
+					viewAs = false;
+					load($info.metadata.pubkey, viewAs);
+				}}
+			>
 				{#if metadataContent.display_name}
 					<b style="font-size: 20px">{metadataContent.display_name}</b>
 				{/if}
