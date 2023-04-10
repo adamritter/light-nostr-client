@@ -1,9 +1,5 @@
 <!-- TODO:
-  - Recursive retrieve replies
-  - Show likes
   - Show reposts
-  - Show follows
-   
 -->
 <script lang="ts">
 	import { onMount } from 'svelte';

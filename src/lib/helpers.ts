@@ -207,8 +207,8 @@ export async function renderNote(event: Event, relayPool: RelayPool) {
 			)'><img src='https://imgproxy.iris.to/insecure/rs:fill:80:80/plain/${picture}' style='border-radius: 50%; cursor: pointer; max-height:30px; max-width: 30px;' width=60 height=60></a><br>`
 		);
 	} else {
-		// just leave 60px
-		body.push("<span style='width: 60px'></span>");
+		// just leave 30px
+		body.push("<span style='width: 30px'></span>");
 	}
 	body.push('<span>');
 	body.push(`<a onclick='load(
