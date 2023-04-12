@@ -45,25 +45,31 @@ function moveElements(from: string, to: string, eventRedirects: Map<string, stri
 	}
 }
 
-function mergeHolders(holderId1: string, holderId2: string, eventRedirects: Map<string, string>) {
-	if (holderId1 === holderId2) {
+function mergeHolders(
+	holderElementId1: string,
+	holderElementId2: string,
+	eventRedirects: Map<string, string>
+) {
+	if (holderElementId1 === holderElementId2) {
 		return;
 	}
 	// console.log('putUnder mergeHolders', holderId1, holderId2);
-	holderId1 = getFinalElementId(holderId1, eventRedirects) + '_holder';
-	holderId2 = getFinalElementId(holderId2, eventRedirects) + '_holder';
-	if (holderId1 === holderId2) {
+	holderElementId1 = getFinalElementId(holderElementId1, eventRedirects);
+	holderElementId2 = getFinalElementId(holderElementId2, eventRedirects);
+	if (holderElementId1 === holderElementId2) {
 		return;
 	}
+	const holderId1 = holderElementId1 + '_holder';
+	const holderId2 = holderElementId2 + '_holder';
 	const holder1 = document.getElementById(holderId1);
 	const holder2 = document.getElementById(holderId2);
 	if (!holder1) {
-		eventRedirects.set(holderId1, holderId2);
+		eventRedirects.set(holderElementId1, holderElementId2);
 		assertNoInfiniteLoop(eventRedirects);
 		return;
 	}
 	if (!holder2) {
-		eventRedirects.set(holderId2, holderId1);
+		eventRedirects.set(holderElementId2, holderElementId1);
 		assertNoInfiniteLoop(eventRedirects);
 		return;
 	}
@@ -76,24 +82,30 @@ function mergeHolders(holderId1: string, holderId2: string, eventRedirects: Map<
 	}
 }
 
+// Union
 export function addEventRedirect(
 	holderElementId: string,
 	elementid: string,
 	eventRedirects: Map<string, string>
 ) {
-	console.log('threads.ts addEventRedirect', holderElementId, elementid);
 	if (!holderElementId || !elementid) {
 		return;
 	}
-	if (eventRedirects.has(elementid)) {
-		mergeHolders(holderElementId, eventRedirects.get(elementid)!, eventRedirects);
-	} else {
-		assertNoInfiniteLoop(eventRedirects);
-		const finalElementId = getFinalElementId(holderElementId, eventRedirects);
-		if (finalElementId !== elementid) {
-			eventRedirects.set(elementid, getFinalElementId(holderElementId, eventRedirects));
-		}
-		assertNoInfiniteLoop(eventRedirects);
+	const originalHolderElementId = holderElementId;
+	const originalElementId = elementid;
+	holderElementId = getFinalElementId(holderElementId, eventRedirects);
+	elementid = getFinalElementId(elementid, eventRedirects);
+	console.log(
+		'threads.ts addEventRedirect',
+		originalHolderElementId,
+		originalElementId,
+		' -> ',
+		holderElementId,
+		elementid
+	);
+
+	if (elementid != holderElementId) {
+		mergeHolders(holderElementId, elementid, eventRedirects);
 	}
 }
 

@@ -376,6 +376,7 @@ function showComments(relayPool: RelayPool, event: Event, eventRedirects: Map<st
 		DEFAULT_RELAYS,
 		(reactionEvent: Event) => {
 			addEventRedirect(event.id, reactionEvent.id, eventRedirects);
+			redirectReferencedEvents(reactionEvent, eventRedirects);
 			if (onlyShowHiddenCommentsCount && document.getElementById(reactionEvent.id)) {
 				return;
 			}
