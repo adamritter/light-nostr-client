@@ -12,7 +12,7 @@ import type { Event } from 'nostr-tools';
 // English.
 import en from 'javascript-time-ago/locale/en';
 import type { RelayPool } from 'nostr-relaypool';
-import { addHolderRedirect, putUnder } from './threads';
+import { addEventRedirect, putUnder } from './threads';
 TimeAgo.addLocale(en);
 
 // Create formatter (English).
@@ -222,7 +222,6 @@ export async function renderNote(event: Event, relayPool: RelayPool) {
 	}
 	body.push(' ' + timeAgo.format(event.created_at * 1000, 'mini'));
 	body.push(`</a>`);
-	// console.log('escapeHtml', event);
 	body.push(
 		` <a onclick='console.log("log_event", ${escapeHtml(JSON.stringify(event))})'>[log]</a>`
 	);
@@ -255,14 +254,15 @@ export async function handleRepliedToOrRootEvent(
 	relayPool: RelayPool,
 	pubkey: string,
 	cancelled: () => boolean,
-	redirectHolder: Map<string, string>,
+	eventRedirects: Map<string, string>,
 	counters: { num_event2s: number },
 	start2: number,
 	index: number
 ) {
+	redirectReferencedEvents(event2, eventRedirects);
 	const eventIdWithContent = event.id + ' ' + event.content;
 	const event2IdWithContent = event2.id + ' ' + event2.content;
-	// console.log('event2', event2IdWithContent, ' for event ', eventIdWithContent);
+	console.log('event2', event2IdWithContent, ' for event ', eventIdWithContent);
 	if (event2.kind != 1) {
 		console.log('kind != 1 for event2 ', event2.id);
 		return;
@@ -271,10 +271,6 @@ export async function handleRepliedToOrRootEvent(
 		console.log('cancelled while trying to show event', event2IdWithContent);
 		return;
 	}
-	// const found = event.tags.find((x) => x[1] == event2.id) ? true : false;
-	// if (!found) {
-	// 	throw new Error('event2 not found in event.tags ' + event2IdWithContent);
-	// }
 
 	counters.num_event2s++;
 	if (counters.num_event2s % 100 == 0) {
@@ -286,7 +282,7 @@ export async function handleRepliedToOrRootEvent(
 		);
 	}
 	console.log('fetching metadata for ', event2.pubkey, event2IdWithContent);
-	showNote(event2, relayPool, redirectHolder);
+	showNote(event2, relayPool, eventRedirects);
 	if (index < 10) {
 		showLikes(relayPool, event2);
 	} else {
@@ -294,7 +290,7 @@ export async function handleRepliedToOrRootEvent(
 			showLikes(relayPool, event2);
 		}, showLikesAndCommentsAfterMs);
 	}
-	redirectReferencedEvents(event, redirectHolder);
+	redirectReferencedEvents(event, eventRedirects);
 
 	if (RECURSIVELY_LOAD_REPLIES) {
 		relayPool.subscribeReferencedEventsAndPrefetchMetadata(
@@ -306,7 +302,7 @@ export async function handleRepliedToOrRootEvent(
 					relayPool,
 					pubkey,
 					cancelled,
-					redirectHolder,
+					eventRedirects,
 					counters,
 					start2,
 					index
@@ -351,16 +347,16 @@ function showLikes(relayPool: RelayPool, event: Event) {
 
 const onlyShowHiddenCommentsCount = true;
 
-function redirectReferencedEvents(event: Event, redirectHolder: Map<string, string>) {
+function redirectReferencedEvents(event: Event, eventRedirects: Map<string, string>) {
 	for (const tag of event.tags) {
 		if (tag[0] === 'e') {
 			const id = tag[1];
-			addHolderRedirect(event.id, id, redirectHolder);
+			addEventRedirect(event.id, id, eventRedirects);
 		}
 	}
 }
 
-function showComments(relayPool: RelayPool, event: Event, redirectHolder: Map<string, string>) {
+function showComments(relayPool: RelayPool, event: Event, eventRedirects: Map<string, string>) {
 	if (!shouldShowComments) {
 		return;
 	}
@@ -370,7 +366,7 @@ function showComments(relayPool: RelayPool, event: Event, redirectHolder: Map<st
 		const commentsEventDiv = document.getElementById(event.id + 'comments');
 		console.log('origid', commentsEventDiv?.id);
 		for (const comment of comments) {
-			showNote(comment, relayPool, redirectHolder);
+			showNote(comment, relayPool, eventRedirects);
 		}
 		commentsEventDiv!.innerHTML = '';
 	};
@@ -379,7 +375,7 @@ function showComments(relayPool: RelayPool, event: Event, redirectHolder: Map<st
 		[{ '#e': [event.id], kinds: [1], limit: 100 }],
 		DEFAULT_RELAYS,
 		(reactionEvent: Event) => {
-			addHolderRedirect(event.id, reactionEvent.id, redirectHolder);
+			addEventRedirect(event.id, reactionEvent.id, eventRedirects);
 			if (onlyShowHiddenCommentsCount && document.getElementById(reactionEvent.id)) {
 				return;
 			}
@@ -400,9 +396,9 @@ function showComments(relayPool: RelayPool, event: Event, redirectHolder: Map<st
 	}
 }
 
-async function showNote(event: Event, relayPool: RelayPool, redirectHolder: Map<string, string>) {
+async function showNote(event: Event, relayPool: RelayPool, eventRedirects: Map<string, string>) {
 	const noteHtml = await renderNote(event, relayPool);
-	putUnder(event.id, -event.created_at, noteHtml, redirectHolder);
+	putUnder(event.id, -event.created_at, noteHtml, eventRedirects);
 }
 
 export async function subscribeCallback(
@@ -411,7 +407,7 @@ export async function subscribeCallback(
 	url: string | undefined,
 	pubkey: string,
 	cancelled: () => boolean,
-	redirectHolder: Map<string, string>,
+	eventRedirects: Map<string, string>,
 	counters: { num_events: number; num_event2s: number },
 	start: number,
 	relayPool: RelayPool,
@@ -438,8 +434,8 @@ export async function subscribeCallback(
 	}
 	const start2 = performance.now();
 	console.log('adding event to div ', eventIdWithContent);
-	showNote(event, relayPool, redirectHolder);
-	redirectReferencedEvents(event, redirectHolder);
+	showNote(event, relayPool, eventRedirects);
+	redirectReferencedEvents(event, eventRedirects);
 	console.log(
 		'calling subscribeReferencedEventsAndPrefetchMetadata, event: ',
 		JSON.stringify(event)
@@ -460,7 +456,7 @@ export async function subscribeCallback(
 				relayPool,
 				pubkey,
 				cancelled,
-				redirectHolder,
+				eventRedirects,
 				counters,
 				start2,
 				index
@@ -472,18 +468,18 @@ export async function subscribeCallback(
 	);
 	if (index < 10) {
 		showLikes(relayPool, event);
-		showComments(relayPool, event, redirectHolder);
+		showComments(relayPool, event, eventRedirects);
 	} else {
 		setTimeout(() => {
 			showLikes(relayPool, event);
-			showComments(relayPool, event, redirectHolder);
+			showComments(relayPool, event, eventRedirects);
 		}, showLikesAndCommentsAfterMs);
 	}
 }
 
 export async function subscribeToEvents(
 	relayPool: RelayPool,
-	redirectHolder: Map<string, string>,
+	eventRedirects: Map<string, string>,
 	counters: { num_events: number; num_event2s: number },
 	start: number,
 	pubkey: string,
@@ -514,7 +510,7 @@ export async function subscribeToEvents(
 				url,
 				pubkey,
 				cancelled,
-				redirectHolder,
+				eventRedirects,
 				counters,
 				start,
 				relayPool,
@@ -525,4 +521,9 @@ export async function subscribeToEvents(
 		undefined,
 		{ defaultRelays: DEFAULT_RELAYS }
 	);
+}
+
+export function windowNostr() {
+	// @ts-ignore
+	return document && document.window.nostr;
 }

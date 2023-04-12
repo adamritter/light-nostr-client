@@ -1,10 +1,19 @@
 <!-- TODO:
+  - Log in
+  - Comment number shouldn't contain shown comments
+  - Like
+  - Reply
+  - Show photos
   - Show reposts
+  - Repost
+  - Probably it's better to create a Svelte widget instead of page
+  - Unsub
+  - Show zaps
 -->
 <script lang="ts">
+	import MetadataContentComponent from './../../lib/metadata_content_component.svelte';
 	import { onMount } from 'svelte';
 	import { writable } from 'svelte/store';
-	import type { Event } from 'nostr-tools';
 	import { RelayPool } from 'nostr-relaypool';
 	import {
 		fetchInfo,
@@ -14,8 +23,10 @@
 		writeRelaysForContactList,
 		parseJSON,
 		type MetadataContent,
-		subscribeToEvents
+		subscribeToEvents,
+		windowNostr
 	} from '../../lib/helpers';
+	import Feed from '$lib/feed.svelte';
 
 	let viewAs = false;
 
@@ -96,70 +107,31 @@
 	let relayPool: RelayPool = new RelayPool(undefined, { logSubscriptions: true });
 	let metadataContent: MetadataContent;
 	$: console.log(metadataContent);
+	let nostr: any = null;
+	onMount(() => {
+		// @ts-ignore
+		nostr = window.nostr;
+		nostrPublicKey = localStorage.getItem('publicKey');
+	});
+	let nostrPublicKey: string | null = null;
 </script>
 
-<!-- WMP: {$writableMetadataPromise} -->
-<!-- {#await $writableMetadataPromise then metadata} -->
-<!-- MD: {metadata} -->
-<!-- {#if metadata && metadata.content} -->
-<!-- {@const metadataContent = parseJSON(metadata.content)} -->
-{#if metadataContent}
-	<span style="display: flex; justify-content: flex-start;">
-		{#if metadataContent.picture}
-			<img
-				alt={lastPubKey}
-				src={metadataContent.picture}
-				style="border-radius: 50%; cursor: pointer; max-height: min(30vw,200px); max-width: min(100%,200px);"
-				width="60"
-				height="60"
-			/>
-			<br />
-		{:else}
-			<span style="width: 60px" />
-		{/if}
-		<span>
-			<a
-				on:click={() => {
-					viewAs = false;
-					load($info.metadata.pubkey, viewAs);
-				}}
-			>
-				{#if metadataContent.display_name}
-					<b style="font-size: 20px">{metadataContent.display_name}</b>
-				{/if}
-				{#if metadataContent.name}
-					@{metadataContent.name}<br />
-				{/if}
-			</a>
-			<input
-				type="text"
-				value={npubEncode(lastPubKey)}
-				on:click={() => {
-					// @ts-ignore
-					this.select();
-					document.execCommand('copy');
-				}}
-			/>
-			<br />
-			{#if metadataContent.nip05}
-				<span style="color: #34ba7c">{metadataContent.nip05}</span><br />
-			{/if}
-			{#if metadataContent.about}
-				{metadataContent.about}<br /><br />
-			{/if}
-			{#if metadataContent.website}
-				<a href={metadataContent.website}>{metadataContent.website}</a><br /><br />
-			{/if}
+{#if nostr && !nostrPublicKey}
+	<button
+		on:click={async () => {
+			localStorage.setItem('publicKey', await nostr.getPublicKey());
+			nostrPublicKey = localStorage.getItem('publicKey');
+		}}>Log in</button
+	>
+{/if}
 
-			<a href="/{npubEncode(lastPubKey)}/followers">{$info?.followerCount || 0} followers</a><br
-			/><br />
-			<a href="/{lastPubKey}/followers.json">Followers JSON</a>
-			<a href="/{lastPubKey}/metadata.json">Metadata JSON</a>
-			<a href="/{lastPubKey}/info.json">Info JSON</a>
-			<a href="/{lastPubKey}/contacts.json">Contacts JSON</a>
-			<a href="/{lastPubKey}/writerelays.json">Write relays JSON</a> <br /><br />
-		</span>
-	</span>
+{#if metadataContent}
+	<MetadataContentComponent
+		{metadataContent}
+		publicKey={lastPubKey}
+		followerCount={$info.followerCount}
+		{viewAs}
+	/>
 {/if}
 
 <label for="viewas">View as</label>
@@ -174,10 +146,7 @@
 	id="eventsandinfo"
 	style="display: flex; justify-content: flex-start; max-width: 100%; overflow: hidden"
 >
-	<div
-		id="events"
-		style="flex-grow: 4; display: flex; flex-direction: column; max-width: 70%; overflow: hidden"
-	/>
+	<Feed {viewAs} publicKey={lastPubKey} {relayPool} />
 	<span id="info" style="flex-grow: 1; max-width: 30%">
 		{#if $info}
 			{#if $info.following}

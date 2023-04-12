@@ -76,12 +76,12 @@ function mergeHolders(holderId1: string, holderId2: string, eventRedirects: Map<
 	}
 }
 
-export function addHolderRedirect(
+export function addEventRedirect(
 	holderElementId: string,
 	elementid: string,
 	eventRedirects: Map<string, string>
 ) {
-	// console.log('putUnder addEventRedirect', holderElementId, elementid);
+	console.log('threads.ts addEventRedirect', holderElementId, elementid);
 	if (!holderElementId || !elementid) {
 		return;
 	}
@@ -109,7 +109,7 @@ export function htmlToElement(html: string): HTMLElement {
 	return node as HTMLElement;
 }
 
-export function createOrGetHolderElement(
+function createOrGetHolderElement(
 	eventId: string,
 	score: number,
 	eventRedirects: Map<string, string>
@@ -117,7 +117,7 @@ export function createOrGetHolderElement(
 	const holderElementId = getFinalElementId(eventId, eventRedirects) + '_holder';
 	const existingHolderElement = document.getElementById(holderElementId);
 	if (existingHolderElement) {
-		// console.log('createOrGetHolderElement: holder already exists ' + holderElementId);
+		console.log('threads.ts createOrGetHolderElement: holder already exists ' + holderElementId);
 		// Update score
 		const oldScore = parseFloat(existingHolderElement.style.order);
 		if (oldScore > score) {
@@ -126,6 +126,7 @@ export function createOrGetHolderElement(
 		}
 		return existingHolderElement;
 	}
+	console.log('threads.ts createOrGetHolderElement: create holder ' + holderElementId);
 	const holderHtml = `<span id='${holderElementId}' style='border-bottom: solid white 2px; order: ${score}; display: flex;  flex-direction: column'></span>`;
 	const holderElement = htmlToElement(holderHtml);
 	const eventsElement = document.getElementById('events')!;
@@ -141,12 +142,12 @@ export function putUnder(
 	eventRedirects: Map<string, string>
 ) {
 	if (document.getElementById(eventId)) {
-		console.log('putUnder: element already exists', eventId);
+		console.log('threads.ts putUnder: element already exists', eventId);
 		return;
 	}
 	const holderElement = createOrGetHolderElement(eventId, score, eventRedirects);
 	const element = htmlToElement(elementHTML);
-	console.log('putUnder: add element', eventId, element.id, holderElement.id);
+	console.log('threads.ts putUnder: add element', eventId, element.id, holderElement.id);
 	element.id = eventId;
 	holderElement.appendChild(element);
 }
