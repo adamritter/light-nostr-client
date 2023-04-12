@@ -347,6 +347,18 @@ function showLikes(relayPool: RelayPool, event: Event) {
 
 const onlyShowHiddenCommentsCount = true;
 
+function hasReferencedAuthor(event: Event, pubkey: string) {
+	for (const tag of event.tags) {
+		if (tag[0] === 'p') {
+			const id = tag[1];
+			if (id === pubkey) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
 function redirectReferencedEvents(event: Event, eventRedirects: Map<string, string>) {
 	for (const tag of event.tags) {
 		if (tag[0] === 'e') {
@@ -380,6 +392,11 @@ function showComments(relayPool: RelayPool, event: Event, eventRedirects: Map<st
 			if (onlyShowHiddenCommentsCount && document.getElementById(reactionEvent.id)) {
 				return;
 			}
+			if (hasReferencedAuthor(event, reactionEvent.pubkey)) {
+				showNote(reactionEvent, relayPool, eventRedirects);
+				return;
+			}
+
 			comments.push(reactionEvent);
 			const commentsEventDiv = document.getElementById(event.id + 'comments');
 			if (commentsEventDiv) {
@@ -491,7 +508,7 @@ export async function subscribeToEvents(
 	let thisMainEventCount = mainEventCount;
 	if (viewAs) {
 		authors = (await relayPool.fetchAndCacheContactList(pubkey)).tags
-			.filter((tag: any) => tag[0] == 'p')
+			.filter((tag: any) => tag[0] === 'p')
 			.map((tag: any) => tag[1]);
 		thisMainEventCount = viewAsMainEventCount;
 	}
