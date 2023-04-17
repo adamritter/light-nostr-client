@@ -1,14 +1,19 @@
 <script lang="ts">
-	import { npubEncode, type MetadataContent } from './helpers';
+	import type { Event } from 'nostr-tools';
+	import { npubEncode, type MetadataContent, parseJSON } from './helpers';
+	import type { RelayPool } from 'nostr-relaypool';
 
-	export let metadataContent: MetadataContent;
+	let metadataContent: MetadataContent;
 	export let publicKey: string;
-	export let viewAs: boolean;
-	export let followerCount: number | undefined;
+	let followerCount: number | undefined = undefined;
+	export let relayPool: RelayPool;
+	relayPool.fetchAndCacheMetadata(publicKey).then((metadata: Event) => {
+		metadataContent = parseJSON(metadata.content);
+	});
 </script>
 
 {#if metadataContent}
-	<span style="display: flex; justify-content: flex-start;">
+	<span style="display: flex; justify-content: center;">
 		{#if metadataContent.picture}
 			<img
 				alt={publicKey}
@@ -54,7 +59,9 @@
 				<a href={metadataContent.website}>{metadataContent.website}</a><br /><br />
 			{/if}
 
-			<a href="/{npubEncode(publicKey)}/followers">{followerCount || 0} followers</a><br /><br />
+			<a href="/{npubEncode(publicKey)}/followers"
+				>{#if followerCount} {followerCount} {/if} followers</a
+			><br /><br />
 			<a href="/{publicKey}/followers.json">Followers JSON</a>
 			<a href="/{publicKey}/metadata.json">Metadata JSON</a>
 			<a href="/{publicKey}/info.json">Info JSON</a>

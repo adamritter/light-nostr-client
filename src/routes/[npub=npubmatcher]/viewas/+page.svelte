@@ -17,17 +17,7 @@
 	import { page } from '$app/stores';
 	import { nip19 } from 'nostr-tools';
 
-	let viewAs = false;
-
-	function clearSearchResults() {
-		const qel = document.getElementById('search-results');
-		qel?.replaceChildren();
-		const q = document.getElementById('q');
-		if (q) {
-			// @ts-ignore
-			q.value = '';
-		}
-	}
+	let viewAs = true;
 
 	let publicKey = npubDecode($page.params.npub);
 

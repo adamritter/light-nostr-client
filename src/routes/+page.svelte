@@ -1,42 +1,16 @@
-<!-- TODO:
-  - Log in
-  - Comment number shouldn't contain shown comments
-  - Like
-  - Reply
-  - Show photos
-  - Show reposts
-  - Repost
-  - Show zaps
--->
 <script lang="ts">
-	import Profile from '$lib/profile.svelte';
 	import { onMount } from 'svelte';
-	import { RelayPool } from 'nostr-relaypool';
-	import { npubDecode } from '$lib/helpers';
 	import Feed from '$lib/feed.svelte';
-	import { page } from '$app/stores';
 	import { nip19 } from 'nostr-tools';
 
-	let viewAs = false;
-
-	function clearSearchResults() {
-		const qel = document.getElementById('search-results');
-		qel?.replaceChildren();
-		const q = document.getElementById('q');
-		if (q) {
-			// @ts-ignore
-			q.value = '';
-		}
-	}
-
-	let publicKey = npubDecode($page.params.npub);
-
-	let relayPool: RelayPool = new RelayPool(undefined, { logSubscriptions: true });
+	let viewAs = true;
+	let publicKey: string | null = null;
 	let nostr: any = null;
 	onMount(() => {
 		// @ts-ignore
 		nostr = window.nostr;
 		loggedInUser = localStorage.getItem('publicKey');
+		publicKey = loggedInUser;
 		// @ts-ignore
 		window.load = (newPublicKey: string) => {
 			location.href = '/' + nip19.npubEncode(newPublicKey);
@@ -50,16 +24,10 @@
 		on:click={async () => {
 			localStorage.setItem('publicKey', await nostr.getPublicKey());
 			loggedInUser = localStorage.getItem('publicKey');
-		}}>Log in</button
+			publicKey = loggedInUser;
+		}}>Log in with extension</button
 	>
 {/if}
-
-{#if publicKey}
-	<Profile {publicKey} {relayPool} />
-{/if}
-
-<label for="viewas">View as</label>
-<input type="checkbox" id="viewas" bind:checked={viewAs} />
 
 <span
 	id="eventsandinfo"

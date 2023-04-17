@@ -64,10 +64,17 @@ export async function fetchInfo(pubkey: string): Promise<{
 	following: any[];
 	followerCount?: number;
 }> {
+	if (!pubkey) {
+		return Promise.reject('no pubkey');
+	}
 	return new Promise((resolve) => {
 		for (const server of ['https://us.rbr.bio', 'https://eu.rbr.bio']) {
 			const url = `${server}/${pubkey}/info.json`;
-			fetchJSON(url).then(resolve);
+			fetchJSON(url)
+				.then(resolve)
+				.catch((e) => {
+					console.error('error fetching info.json', e);
+				});
 		}
 	});
 }
@@ -227,23 +234,27 @@ export async function renderNote(event: Event, relayPool: RelayPool) {
 	);
 	body.push(`<br>`);
 
-	let content = escapeHtml(event.content).replaceAll('\n', '<br>');
-	// replace http and https with regexp
-	// content = content.replaceAll(
-	// 	/(https?:\/\/[^\s]+\.(png|jpg|jpeg))/g,
-	// 	'<img src="https://imgproxy.iris.to/insecure/rs:fit:1138:1138/plain/$1" width="569" height="569" />'
-	// );
-	// content = content.replaceAll(
-	// 	/(\s)(https?:\/\/[^\s]+)/g,
-	// 	'$1<a href="$2" target="_blank">$2</a>'
-	// );
-	content = content.replaceAll(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank">$1</a>');
+	let content = escapeHtml(event.content);
+
+	content = content.replaceAll(/(https?:\/\/[^\s]+)/g, function (match, url) {
+		if (url.match(/\.(?:png|jpg|jpeg|gif|bmp|svg|webp)$/i)) {
+			return (
+				'<img src="https://imgproxy.iris.to/insecure/rs:fit:1138:1138/plain/' +
+				url +
+				'"   height="400px" />'
+			);
+		} else {
+			return '<a href="' + url + '" target="_blank">' + url + '</a>';
+		}
+	});
+	content = content.replaceAll('\n', '<br>');
+
 	content = await replaceReferences(event, content, relayPool); // Move to top
 	body.push(`<span>${content}</span><br>`);
 
 	// body.push(`${infoMetadata?.followerCount || 0}  followers<br></span></span>`);
 	body.push(`<span id="${event.id}comments"></span>`);
-	body.push(`<span id="${event.id}likes"></span>`);
+	body.push(`<span id="${event.id}likes"> ♡</span>`);
 	body.push('</span></span>');
 	return body.join('');
 }
@@ -257,7 +268,8 @@ export async function handleRepliedToOrRootEvent(
 	eventRedirects: Map<string, string>,
 	counters: { num_event2s: number },
 	start2: number,
-	index: number
+	index: number,
+	loggedInUser: string | null
 ) {
 	redirectReferencedEvents(event2, eventRedirects);
 	const eventIdWithContent = event.id + ' ' + event.content;
@@ -284,10 +296,10 @@ export async function handleRepliedToOrRootEvent(
 	console.log('fetching metadata for ', event2.pubkey, event2IdWithContent);
 	showNote(event2, relayPool, eventRedirects);
 	if (index < 10) {
-		showLikes(relayPool, event2);
+		showLikes(relayPool, event2, loggedInUser);
 	} else {
 		setTimeout(() => {
-			showLikes(relayPool, event2);
+			showLikes(relayPool, event2, loggedInUser);
 		}, showLikesAndCommentsAfterMs);
 	}
 	redirectReferencedEvents(event, eventRedirects);
@@ -315,28 +327,50 @@ export async function handleRepliedToOrRootEvent(
 	}
 }
 
-function showLikes(relayPool: RelayPool, event: Event) {
+function showLikes(relayPool: RelayPool, event: Event, loggedInUser: string | null) {
 	if (!shouldShowLikes) {
 		return;
 	}
-	const reactions = {};
+	const reactions: Map<string, number> = new Map();
+	reactions.set('♡', 0);
+	let loggedInUserLiked = false;
 	relayPool.subscribe(
 		[{ '#e': [event.id], kinds: [7], limit: 100 }],
 		DEFAULT_RELAYS,
 		(reactionEvent: Event) => {
 			let reaction = reactionEvent.content;
-			if (reaction == '👍' || reaction == '+' || reaction == '👍🏻') {
-				reaction = '🤙';
+			if (
+				reaction == '👍' ||
+				reaction == '+' ||
+				reaction == '👍🏻' ||
+				reaction == '🤙' ||
+				reaction == '♡' ||
+				reaction == '❤️'
+			) {
+				reaction = '♡';
+				console.log('reactionEvent.pubkey', reactionEvent.pubkey + ' ' + loggedInUser);
+				if (loggedInUser && reactionEvent.pubkey == loggedInUser) {
+					loggedInUserLiked = true;
+				}
 			}
-			if (!reactions[reaction]) {
-				reactions[reaction] = 0;
-			}
-			reactions[reaction]++;
+			reactions.set(reaction, (reactions.get(reaction) || 0) + 1);
 			const reactionEventDiv = document.getElementById(event.id + 'likes');
 			if (reactionEventDiv) {
-				reactionEventDiv.innerHTML = Object.keys(reactions)
-					.map((k) => k + ' ' + reactions[k])
-					.join(' ');
+				let reactionHTML = '';
+				for (const [k, v] of reactions) {
+					if (k === '♡' && loggedInUserLiked) {
+						reactionHTML += '❤️';
+					} else {
+						reactionHTML += k;
+					}
+					if (v > 0) {
+						reactionHTML += ' ' + v.toString();
+					} else {
+						reactionHTML += ' ';
+					}
+				}
+
+				reactionEventDiv.innerHTML = ' ' + reactionHTML;
 			}
 		},
 		200,
@@ -429,7 +463,8 @@ export async function subscribeCallback(
 	counters: { num_events: number; num_event2s: number },
 	start: number,
 	relayPool: RelayPool,
-	index: number
+	index: number,
+	loggedInUser: string | null
 ) {
 	const eventIdWithContent = event.id + ' ' + event.content;
 	if (event.relays) {
@@ -477,7 +512,8 @@ export async function subscribeCallback(
 				eventRedirects,
 				counters,
 				start2,
-				index
+				index,
+				loggedInUser
 			);
 		},
 		30,
@@ -485,11 +521,11 @@ export async function subscribeCallback(
 		{ unsubscribeOnEose: true, defaultRelays: DEFAULT_RELAYS }
 	);
 	if (index < 10) {
-		showLikes(relayPool, event);
+		showLikes(relayPool, event, loggedInUser);
 		showComments(relayPool, event, eventRedirects);
 	} else {
 		setTimeout(() => {
-			showLikes(relayPool, event);
+			showLikes(relayPool, event, loggedInUser);
 			showComments(relayPool, event, eventRedirects);
 		}, showLikesAndCommentsAfterMs);
 	}
@@ -502,7 +538,8 @@ export async function subscribeToEvents(
 	start: number,
 	pubkey: string,
 	cancelled: () => boolean,
-	viewAs: boolean
+	viewAs: boolean,
+	loggedInUser: string | null
 ) {
 	let authors = [pubkey];
 	let thisMainEventCount = mainEventCount;
@@ -532,7 +569,8 @@ export async function subscribeToEvents(
 				counters,
 				start,
 				relayPool,
-				index
+				index,
+				loggedInUser
 			);
 		},
 		undefined,
@@ -544,4 +582,14 @@ export async function subscribeToEvents(
 export function windowNostr() {
 	// @ts-ignore
 	return document && document.window.nostr;
+}
+
+function clearSearchResults() {
+	const qel = document.getElementById('search-results');
+	qel?.replaceChildren();
+	const q = document.getElementById('q');
+	if (q) {
+		// @ts-ignore
+		q.value = '';
+	}
 }

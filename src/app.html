@@ -11,12 +11,17 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1">
 	</head>
 	<body data-sveltekit-preload-data="hover">
-
+<span style="display: flex; justify-content: center;">
 <a href='/' rel="external">Home</a>
 <input type='text' name='q' id='q' placeholder='Search' autocomplete='off' style='width: 100%; max-width: 400px'
  oninput='search(this.value.toLowerCase())'
- onchange='search(this.value.toLowerCase())' /><br>
+ onchange='search(this.value.toLowerCase())' />
+ </span>
+ <br>
+ <span style="display: flex; justify-content: center;">
     <span id='search-results' style='border-left: 40px'></span>
+  </span>
+  </span>
 <script>
 let lastsearch=""
 function search(q) {
