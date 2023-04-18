@@ -8,6 +8,8 @@ const RECURSIVELY_LOAD_REPLIES = true;
 import { nip19 } from 'nostr-tools';
 import TimeAgo from 'javascript-time-ago';
 import type { Event } from 'nostr-tools';
+import { LogisticRegressor } from './logistic_regression';
+import { processEventForLogisticRegression } from './ranking';
 
 // English.
 import en from 'javascript-time-ago/locale/en';
@@ -269,7 +271,8 @@ export async function handleRepliedToOrRootEvent(
 	counters: { num_event2s: number },
 	start2: number,
 	index: number,
-	loggedInUser: string | null
+	loggedInUser: string | null,
+	logisticRegressor: LogisticRegressor
 ) {
 	redirectReferencedEvents(event2, eventRedirects);
 	const eventIdWithContent = event.id + ' ' + event.content;
@@ -296,10 +299,10 @@ export async function handleRepliedToOrRootEvent(
 	console.log('fetching metadata for ', event2.pubkey, event2IdWithContent);
 	showNote(event2, relayPool, eventRedirects);
 	if (index < 10) {
-		showLikes(relayPool, event2, loggedInUser);
+		showLikes(relayPool, event2, loggedInUser, logisticRegressor);
 	} else {
 		setTimeout(() => {
-			showLikes(relayPool, event2, loggedInUser);
+			showLikes(relayPool, event2, loggedInUser, logisticRegressor);
 		}, showLikesAndCommentsAfterMs);
 	}
 	redirectReferencedEvents(event, eventRedirects);
@@ -307,7 +310,8 @@ export async function handleRepliedToOrRootEvent(
 	if (RECURSIVELY_LOAD_REPLIES) {
 		relayPool.subscribeReferencedEventsAndPrefetchMetadata(
 			event2,
-			(event3: any) => {
+			(event3: Event) => {
+				processEventForLogisticRegression(event3, logisticRegressor, loggedInUser, event2);
 				handleRepliedToOrRootEvent(
 					event,
 					event3,
@@ -317,7 +321,9 @@ export async function handleRepliedToOrRootEvent(
 					eventRedirects,
 					counters,
 					start2,
-					index
+					index,
+					loggedInUser,
+					logisticRegressor
 				);
 			},
 			30,
@@ -327,7 +333,12 @@ export async function handleRepliedToOrRootEvent(
 	}
 }
 
-function showLikes(relayPool: RelayPool, event: Event, loggedInUser: string | null) {
+function showLikes(
+	relayPool: RelayPool,
+	event: Event,
+	loggedInUser: string | null,
+	logisticRegressor: LogisticRegressor
+) {
 	if (!shouldShowLikes) {
 		return;
 	}
@@ -338,6 +349,7 @@ function showLikes(relayPool: RelayPool, event: Event, loggedInUser: string | nu
 		[{ '#e': [event.id], kinds: [7], limit: 100 }],
 		DEFAULT_RELAYS,
 		(reactionEvent: Event) => {
+			processEventForLogisticRegression(reactionEvent, logisticRegressor, loggedInUser, event);
 			let reaction = reactionEvent.content;
 			if (
 				reaction == '👍' ||
@@ -348,7 +360,7 @@ function showLikes(relayPool: RelayPool, event: Event, loggedInUser: string | nu
 				reaction == '❤️'
 			) {
 				reaction = '♡';
-				console.log('reactionEvent.pubkey', reactionEvent.pubkey + ' ' + loggedInUser);
+				// console.log('reactionEvent.pubkey', reactionEvent.pubkey + ' ' + loggedInUser);
 				if (loggedInUser && reactionEvent.pubkey == loggedInUser) {
 					loggedInUserLiked = true;
 				}
@@ -402,7 +414,13 @@ function redirectReferencedEvents(event: Event, eventRedirects: Map<string, stri
 	}
 }
 
-function showComments(relayPool: RelayPool, event: Event, eventRedirects: Map<string, string>) {
+function showComments(
+	relayPool: RelayPool,
+	event: Event,
+	eventRedirects: Map<string, string>,
+	loggedInUser: string | null,
+	logisticRegressor: LogisticRegressor
+) {
 	if (!shouldShowComments) {
 		return;
 	}
@@ -421,6 +439,7 @@ function showComments(relayPool: RelayPool, event: Event, eventRedirects: Map<st
 		[{ '#e': [event.id], kinds: [1], limit: 100 }],
 		DEFAULT_RELAYS,
 		(reactionEvent: Event) => {
+			processEventForLogisticRegression(reactionEvent, logisticRegressor, loggedInUser, event);
 			addEventRedirect(event.id, reactionEvent.id, eventRedirects);
 			redirectReferencedEvents(reactionEvent, eventRedirects);
 			if (onlyShowHiddenCommentsCount && document.getElementById(reactionEvent.id)) {
@@ -455,7 +474,7 @@ async function showNote(event: Event, relayPool: RelayPool, eventRedirects: Map<
 
 export async function subscribeCallback(
 	event: any,
-	afterEose: any,
+	afterEose: boolean,
 	url: string | undefined,
 	pubkey: string,
 	cancelled: () => boolean,
@@ -464,7 +483,8 @@ export async function subscribeCallback(
 	start: number,
 	relayPool: RelayPool,
 	index: number,
-	loggedInUser: string | null
+	loggedInUser: string | null,
+	logisticRegressor: LogisticRegressor
 ) {
 	const eventIdWithContent = event.id + ' ' + event.content;
 	if (event.relays) {
@@ -496,7 +516,8 @@ export async function subscribeCallback(
 
 	relayPool.subscribeReferencedEventsAndPrefetchMetadata(
 		event,
-		(event2: any) => {
+		(event2: Event) => {
+			processEventForLogisticRegression(event2, logisticRegressor, loggedInUser, event2);
 			console.log(
 				'subscribeReferencedEventsAndPrefetchMetadata got event2',
 				event2.id,
@@ -513,7 +534,8 @@ export async function subscribeCallback(
 				counters,
 				start2,
 				index,
-				loggedInUser
+				loggedInUser,
+				logisticRegressor
 			);
 		},
 		30,
@@ -521,12 +543,12 @@ export async function subscribeCallback(
 		{ unsubscribeOnEose: true, defaultRelays: DEFAULT_RELAYS }
 	);
 	if (index < 10) {
-		showLikes(relayPool, event, loggedInUser);
-		showComments(relayPool, event, eventRedirects);
+		showLikes(relayPool, event, loggedInUser, logisticRegressor);
+		showComments(relayPool, event, eventRedirects, loggedInUser, logisticRegressor);
 	} else {
 		setTimeout(() => {
-			showLikes(relayPool, event, loggedInUser);
-			showComments(relayPool, event, eventRedirects);
+			showLikes(relayPool, event, loggedInUser, logisticRegressor);
+			showComments(relayPool, event, eventRedirects, loggedInUser, logisticRegressor);
 		}, showLikesAndCommentsAfterMs);
 	}
 }
@@ -541,19 +563,22 @@ export async function subscribeToEvents(
 	viewAs: boolean,
 	loggedInUser: string | null
 ) {
+	const logisticRegressor = new LogisticRegressor();
+	document.logisticRegressor = logisticRegressor;
 	let authors = [pubkey];
 	let thisMainEventCount = mainEventCount;
 	if (viewAs) {
 		authors = (await relayPool.fetchAndCacheContactList(pubkey)).tags
-			.filter((tag: any) => tag[0] === 'p')
-			.map((tag: any) => tag[1]);
+			.filter((tag: string[]) => tag[0] === 'p')
+			.map((tag: string[]) => tag[1]);
 		thisMainEventCount = viewAsMainEventCount;
 	}
 	let index = 0;
 	relayPool.subscribe(
 		[{ authors, kinds: [1], limit: thisMainEventCount }],
 		undefined,
-		async (event, afterEose, url) => {
+		async (event: Event, afterEose: boolean, url: string) => {
+			processEventForLogisticRegression(event, logisticRegressor, loggedInUser);
 			index++;
 			// @ts-ignore
 			if (event.relays) {
@@ -570,7 +595,8 @@ export async function subscribeToEvents(
 				start,
 				relayPool,
 				index,
-				loggedInUser
+				loggedInUser,
+				logisticRegressor
 			);
 		},
 		undefined,

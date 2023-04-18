@@ -905,6 +905,11 @@
   resolved "https://registry.npmjs.org/@types/semver/-/semver-7.3.13.tgz"
   integrity sha512-21cFJr9z3g5dW8B0CVI9g2O9beqaThGQ6ZFBqHfwhzLDKUxaqTIy3vnfah/UPkfOiF2pLq+tGz+W8RyCskuslw==
 
+"@types/sentiment@^5.0.1":
+  version "5.0.1"
+  resolved "https://registry.npmjs.org/@types/sentiment/-/sentiment-5.0.1.tgz"
+  integrity sha512-EDqF8DFWaVVlEUZ35y+4B3dxI7JCKj0l35umQzi1NksqEihFexvGiMTE7Jd/R7Ottc0eicfgjskWkuBcDQRuuQ==
+
 "@types/stack-utils@^2.0.0":
   version "2.0.1"
   resolved "https://registry.npmjs.org/@types/stack-utils/-/stack-utils-2.0.1.tgz"
@@ -2878,6 +2883,11 @@ playwright-core@1.31.1:
   resolved "https://registry.npmjs.org/playwright-core/-/playwright-core-1.31.1.tgz"
   integrity sha512-JTyX4kV3/LXsvpHkLzL2I36aCdml4zeE35x+G5aPc4bkLsiRiQshU5lWeVpHFAuC8xAcbI6FDcw/8z3q2xtJSQ==
 
+pnpm@^8.3.0:
+  version "8.3.0"
+  resolved "https://registry.npmjs.org/pnpm/-/pnpm-8.3.0.tgz"
+  integrity sha512-wRS8ap/SPxBqbUMzcUNkoA0suLqk9BqMlvi8dM2FRuhwUDgqVGYLc5jQ6Ww3uqVc+84zJvN2GYmTWCubaoWPtQ==
+
 "postcss@^7 || ^8", postcss@^8.4.21:
   version "8.4.21"
   resolved "https://registry.npmjs.org/postcss/-/postcss-8.4.21.tgz"
@@ -3063,6 +3073,11 @@ semver@^7.3.5, semver@^7.3.7, semver@7.x:
   integrity sha512-NB1ctGL5rlHrPJtFDVIVzTyQylMLu9N9VICA6HSFJo8MCGVTMW6gfpicwKmmK/dAjTOrqu5l63JJOpDSrAis3A==
   dependencies:
     lru-cache "^6.0.0"
+
+sentiment@^5.0.2:
+  version "5.0.2"
+  resolved "https://registry.npmjs.org/sentiment/-/sentiment-5.0.2.tgz"
+  integrity sha512-ZeC3y0JsOYTdwujt5uOd7ILJNilbgFzUtg/LEG4wUv43LayFNLZ28ec8+Su+h3saHlJmIwYxBzfDHHZuiMA15g==
 
 set-cookie-parser@^2.5.1:
   version "2.5.1"
