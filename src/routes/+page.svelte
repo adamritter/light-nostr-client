@@ -28,7 +28,7 @@
 		}}>Log in with extension</button
 	>
 {/if}
-{#if !nostr}
+{#if nostr === undefined}
 	<div>
 		Nostr extension not detected. Please enable it / use a desktop browser that enables it, or just
 		use search and view as to look at a user.
