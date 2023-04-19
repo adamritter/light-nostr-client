@@ -157,75 +157,25 @@ export class LogisticRegressor {
 		return sigmoid(r);
 	}
 
-	iterateWeights(count = 1) {
-		// Make sure that there are at least 3 likes
-		let totalLikes = 0;
-		for (let i = 0; i < this.ys.length; i++) {
-			totalLikes += this.ys[i];
-		}
-		if (totalLikes < 3) {
-			console.error('Not enough likes to train model', totalLikes);
+	iterateWeights(count = 1, minNumPositiveExamples = 3) {
+		if (this.numPositiveExamples() < minNumPositiveExamples) {
+			console.error('Not enough likes to train model', this.numPositiveExamples());
 			return;
 		}
 		this.#applyMemberships();
 		for (let i = 0; i < count; i++) {
-			this.#iterateWeightsInner();
+			this.weights = logisticRegressionIterationStep(this.matrix, this.weights, this.ys);
 		}
 	}
-	#iterateWeightsInner() {
-		// Logistic regression iteration step
-		// https://en.wikipedia.org/wiki/Logistic_regression#Algorithm
-		// mu = sigmoid(x*w)
-		// s = diag(mu * (1 - mu))
-		// wnew = (x' * s * x)^-1 * x' * (s * x * w + y - mu)
-		console.time('iterateWeights');
-		console.timeLog(
-			'iterateWeights',
-			'matrix size: ' + this.matrix.length + 'x' + this.matrix[0].length
-		);
-		console.timeLog('iterateWeights', 'compute mu');
-		const mu = matrixTimesVector(this.matrix, this.weights).map(sigmoid);
-		console.timeLog('iterateWeights', 'adjust mu');
-		// Make diagonal matrix invertible
-		for (let i = 0; i < mu.length; i++) {
-			if (mu[i] < 0.0001) mu[i] = 0.0001;
-			if (mu[i] > 0.9999) mu[i] = 0.9999;
+
+	numPositiveExamples(): number {
+		let r = 0;
+		for (let i = 0; i < this.ys.length; i++) {
+			if (this.ys[i] > 0) {
+				r++;
+			}
 		}
-
-		console.timeLog('iterateWeights', 'compute diagonal');
-
-		const mu2 = mu.map((m) => m * (1 - m));
-		console.timeLog('iterateWeights', 'compute transpose');
-		const x = this.matrix;
-		const xtranspose = transpose(x);
-		console.timeLog('iterateWeights', 'compute hessian');
-		const hessian = matMul(matMulWithDiag(xtranspose, mu2), x);
-		console.timeLog('iterateWeights', 'compute inverse');
-		const exp1 = matrixInverse(hessian);
-		if (!exp1) {
-			throw new Error(
-				'Could not invert matrix ' +
-					JSON.stringify(hessian) +
-					' weights ' +
-					JSON.stringify(this.weights) +
-					' ys ' +
-					JSON.stringify(this.ys) +
-					' mu ' +
-					JSON.stringify(mu) +
-					' x ' +
-					JSON.stringify(x) +
-					' xtranspose ' +
-					JSON.stringify(xtranspose)
-			);
-		}
-
-		console.timeLog('iterateWeights', 'compute exp2');
-		const exp2 = matrixTimesVector(diagWithMatMul(mu2, x), this.weights).map(
-			(x, i) => x + this.ys[i] - mu[i]
-		);
-		console.timeLog('iterateWeights', 'compute weights');
-		this.weights = matrixTimesVector(matMul(exp1, xtranspose), exp2);
-		console.timeEnd('iterateWeights');
+		return r;
 	}
 
 	logLikelihood(): number {
@@ -240,8 +190,8 @@ export class LogisticRegressor {
 		return r;
 	}
 
-	train(iterations = 10) {
-		this.iterateWeights(iterations);
+	train(iterations = 10, minNumPositiveExamples = 3) {
+		this.iterateWeights(iterations, minNumPositiveExamples);
 	}
 	createdBefore(createdAt: number): LogisticRegressor {
 		const r = new LogisticRegressor();
@@ -265,6 +215,59 @@ export class LogisticRegressor {
 		r.createdAt = this.createdAt.filter((c) => c < createdAt);
 		return r;
 	}
+}
+
+function logisticRegressionIterationStep(x: number[][], w: number[], y: number[]) {
+	// Logistic regression iteration step
+	// https://en.wikipedia.org/wiki/Logistic_regression#Algorithm
+	// mu = sigmoid(x*w)
+	// s = diag(mu * (1 - mu))
+	// wnew = (x' * s * x)^-1 * x' * (s * x * w + y - mu)
+	console.log('x', x);
+
+	console.time('iterateWeights');
+	console.timeLog('iterateWeights', 'matrix size: ' + x.length + 'x' + x[0].length);
+	console.timeLog('iterateWeights', 'compute mu');
+	const mu = matrixTimesVector(x, w).map(sigmoid);
+	console.timeLog('iterateWeights', 'adjust mu');
+	// Make diagonal matrix invertible
+	for (let i = 0; i < mu.length; i++) {
+		if (mu[i] < 0.0001) mu[i] = 0.0001;
+		if (mu[i] > 0.9999) mu[i] = 0.9999;
+	}
+
+	console.timeLog('iterateWeights', 'compute diagonal');
+
+	const mu2 = mu.map((m) => m * (1 - m));
+	console.timeLog('iterateWeights', 'compute transpose');
+	const xtranspose = transpose(x);
+	console.timeLog('iterateWeights', 'compute hessian');
+	const hessian = matMul(matMulWithDiag(xtranspose, mu2), x);
+	console.timeLog('iterateWeights', 'compute inverse');
+	const exp1 = matrixInverse(hessian);
+	if (!exp1) {
+		throw new Error(
+			'Could not invert matrix ' +
+				JSON.stringify(hessian) +
+				' weights ' +
+				JSON.stringify(w) +
+				' ys ' +
+				JSON.stringify(y) +
+				' mu ' +
+				JSON.stringify(mu) +
+				' x ' +
+				JSON.stringify(x) +
+				' xtranspose ' +
+				JSON.stringify(xtranspose)
+		);
+	}
+
+	console.timeLog('iterateWeights', 'compute exp2');
+	const exp2 = matrixTimesVector(diagWithMatMul(mu2, x), w).map((x, i) => x + y[i] - mu[i]);
+	console.timeLog('iterateWeights', 'compute weights');
+	const w2 = matrixTimesVector(matMul(exp1, xtranspose), exp2);
+	console.timeEnd('iterateWeights');
+	return w2;
 }
 
 function matMul(a: number[][], b: number[][]): number[][] {

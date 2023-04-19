@@ -6,6 +6,7 @@ import matrixInverse from 'matrix-inverse';
 
 test('inference', () => {
 	const lr = new LogisticRegressor();
+	lr.autoCreateRow = true;
 	lr.sety('a', 1);
 	expect(lr.inference('a')).toBe(0.5);
 	lr.weights = [1];
@@ -33,11 +34,12 @@ test('matrix-inverse', () => {
 
 test('train', () => {
 	const lr = new LogisticRegressor();
+	lr.autoCreateRow = true;
 	lr.sety('a', 1);
 	lr.sety('b', 0);
 	lr.sety('c', 1);
 	lr.sety('d', 1);
-	lr.train();
+	lr.train(10, 1);
 	console.log(lr.weights);
 	expect(lr.inference('b')).toBe(0.75);
 });
@@ -57,6 +59,7 @@ test('transpose', () => {
 
 test('train2vars', () => {
 	const lr = new LogisticRegressor();
+	lr.autoCreateRow = true;
 	lr.sety('a', 1);
 	lr.sety('b', 0);
 	lr.sety('c', 1);
@@ -65,7 +68,7 @@ test('train2vars', () => {
 	lr.set('b', 'predictor', 0);
 	lr.set('c', 'predictor', 1);
 	lr.set('d', 'predictor', 1);
-	lr.train();
+	lr.train(10, 1);
 	console.log(lr.weights);
 	expect(lr.inference('b')).toBeCloseTo(0);
 });
