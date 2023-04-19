@@ -43,10 +43,14 @@ export function processEventForLogisticRegression(
 	event: Event,
 	logisticRegressor: LogisticRegressor,
 	loggedInUser: string | null,
-	parentEvent?: Event
+	parentEvent?: Event,
+	shown = true
 ) {
 	if (!loggedInUser) {
 		return;
+	}
+	if (event.kind === 1 && shown) {
+		logisticRegressor.addRow(event.id, event.created_at);
 	}
 	if (event.kind == 1) {
 		if (event.content.match(/png|jpg|jpeg|gif|webp/)) {
@@ -61,7 +65,7 @@ export function processEventForLogisticRegression(
 		logisticRegressor.set(event.id, 'length', event.content.length);
 		logisticRegressor.set(
 			event.id,
-			'reply',
+			'is_reply',
 			event.tags.filter((tag: string[]) => tag[0] === 'e').length > 0 ? 1 : 0
 		);
 		logisticRegressor.set(event.id, 'sentiment', sentiment.analyze(event.content).comparative);

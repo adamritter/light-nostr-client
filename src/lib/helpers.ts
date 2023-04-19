@@ -445,7 +445,13 @@ function showComments(
 		[{ '#e': [event.id], kinds: [1], limit: 100 }],
 		DEFAULT_RELAYS,
 		(reactionEvent: Event) => {
-			processEventForLogisticRegression(reactionEvent, logisticRegressor, loggedInUser, event);
+			processEventForLogisticRegression(
+				reactionEvent,
+				logisticRegressor,
+				loggedInUser,
+				event,
+				false
+			);
 			addEventRedirect(event.id, reactionEvent.id, eventRedirects);
 			redirectReferencedEvents(reactionEvent, eventRedirects);
 			if (onlyShowHiddenCommentsCount && document.getElementById(reactionEvent.id)) {

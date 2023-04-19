@@ -12,11 +12,26 @@ export class LogisticRegressor {
 		}
 		groupMap.set(rowId, member);
 	}
+	addRow(rowId: string, createdAt: number) {
+		if (this.rowIndices.has(rowId)) {
+			return;
+		}
+		const rowIndex = this.ys.length;
+		this.rowIndices.set(rowId, rowIndex);
+		const new_row = new Array(this.weights.length).fill(0.0);
+		new_row[0] = 1.0;
+		this.matrix.push(new_row);
+		this.ys.push(0);
+		this.createdAt.push(createdAt);
+	}
 	#applyMemberships() {
 		console.time('applyMemberships');
 		for (const [group, groupMap] of this.memberships) {
 			const countByMember = new Map();
-			for (const [_, member] of groupMap) {
+			for (const [rowId, member] of groupMap) {
+				if (!this.autoCreateRow && !this.rowIndices.has(rowId)) {
+					continue;
+				}
 				let count = countByMember.get(member);
 				if (count === undefined) {
 					count = 0;
@@ -25,6 +40,9 @@ export class LogisticRegressor {
 			}
 			const likeCountByMember = new Map();
 			for (const [rowId, member] of groupMap) {
+				if (!this.autoCreateRow && !this.rowIndices.has(rowId)) {
+					continue;
+				}
 				const likeCount = likeCountByMember.get(member) || 0;
 				const rowIndex = this.rowIndices.get(rowId);
 				if (rowIndex !== undefined) {
@@ -34,6 +52,9 @@ export class LogisticRegressor {
 			const groupShareLabel = `${group}_share`;
 			const groupLikeRatioLabel = `${group}_like_ratio`;
 			for (const [rowId, member] of groupMap) {
+				if (!this.autoCreateRow && !this.rowIndices.has(rowId)) {
+					continue;
+				}
 				const count = countByMember.get(member) || 0;
 				this.set(rowId, groupShareLabel, (count * 1.0) / this.matrix.length);
 				const likeCount = likeCountByMember.get(member) || 0;
@@ -50,9 +71,13 @@ export class LogisticRegressor {
 	rowIndices: Map<string, number> = new Map();
 	ys: number[] = [];
 	createdAt: number[] = [];
-	#getRowIndex(rowId: string): number {
+	autoCreateRow = false;
+	#getRowIndex(rowId: string): number | undefined {
 		let rowIndex = this.rowIndices.get(rowId);
 		if (rowIndex === undefined) {
+			if (!this.autoCreateRow) {
+				return undefined;
+			}
 			rowIndex = this.ys.length;
 			this.rowIndices.set(rowId, rowIndex);
 			const new_row = new Array(this.weights.length).fill(0.0);
@@ -86,6 +111,9 @@ export class LogisticRegressor {
 	set(rowId: string, label: string, value: number) {
 		// this.checkMatrix();
 		const rowIndex = this.#getRowIndex(rowId);
+		if (rowIndex === undefined) {
+			return;
+		}
 		// this.checkMatrix();
 		const labelIndex = this.#getLabelIndex(label);
 		// this.checkMatrix();
@@ -93,22 +121,33 @@ export class LogisticRegressor {
 		// this.checkMatrix();
 	}
 	sety(rowId: string, y: number) {
-		this.ys[this.#getRowIndex(rowId)] = y;
+		const rowIndex = this.#getRowIndex(rowId);
+		if (rowIndex === undefined) {
+			return;
+		}
+		this.ys[rowIndex] = y;
 	}
-	setCreatedAt(x: string, createdAt: number) {
-		this.createdAt[this.#getRowIndex(x)] = createdAt;
+	setCreatedAt(rowId: string, createdAt: number) {
+		const rowIndex = this.#getRowIndex(rowId);
+		if (rowIndex === undefined) {
+			return;
+		}
+		this.createdAt[rowIndex] = createdAt;
 	}
 	get(rowId: string, label: string): number {
-		if (!this.rowIndices.has(rowId) || !this.labels.has(label)) {
+		const rowIndex = this.#getRowIndex(rowId);
+		const labelIndex = this.#getLabelIndex(label);
+		if (rowIndex === undefined || labelIndex === undefined) {
 			return 0.0;
 		}
-		return this.matrix[this.#getRowIndex(rowId)][this.#getLabelIndex(label)];
+		return this.matrix[rowIndex][labelIndex];
 	}
 	inference(rowId: string): number | undefined {
-		if (!this.rowIndices.has(rowId)) {
+		const rowIndex = this.#getRowIndex(rowId);
+		if (rowIndex === undefined) {
 			return undefined;
 		}
-		return this.#inferenceRow(this.#getRowIndex(rowId));
+		return this.#inferenceRow(rowIndex);
 	}
 	#inferenceRow(rowIndex: number): number {
 		let r = 0.0;
@@ -119,6 +158,15 @@ export class LogisticRegressor {
 	}
 
 	iterateWeights(count = 1) {
+		// Make sure that there are at least 3 likes
+		let totalLikes = 0;
+		for (let i = 0; i < this.ys.length; i++) {
+			totalLikes += this.ys[i];
+		}
+		if (totalLikes < 3) {
+			console.error('Not enough likes to train model', totalLikes);
+			return;
+		}
 		this.#applyMemberships();
 		for (let i = 0; i < count; i++) {
 			this.#iterateWeightsInner();
