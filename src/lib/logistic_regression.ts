@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/ban-ts-comment */
 // @ts-ignore
 import matrixInverse from 'matrix-inverse';
 
@@ -54,7 +55,7 @@ export class LogisticRegressor {
 		if (rowIndex === undefined) {
 			rowIndex = this.ys.length;
 			this.rowIndices.set(rowId, rowIndex);
-			const new_row = new Array(this.labels.size).fill(0.0);
+			const new_row = new Array(this.weights.length).fill(0.0);
 			new_row[0] = 1.0;
 			this.matrix.push(new_row);
 			this.ys.push(0);
@@ -74,9 +75,22 @@ export class LogisticRegressor {
 
 		return nlabel;
 	}
+	#checkMatrix() {
+		for (let i = 0; i < this.matrix.length; i++) {
+			if (this.matrix[i].length != this.weights.length) {
+				console.error('matrix length mismatch', i, this.matrix[i].length, this.weights.length);
+			}
+		}
+	}
 
 	set(rowId: string, label: string, value: number) {
-		this.matrix[this.#getRowIndex(rowId)][this.#getLabelIndex(label)] = value;
+		// this.checkMatrix();
+		const rowIndex = this.#getRowIndex(rowId);
+		// this.checkMatrix();
+		const labelIndex = this.#getLabelIndex(label);
+		// this.checkMatrix();
+		this.matrix[rowIndex][labelIndex] = value;
+		// this.checkMatrix();
 	}
 	sety(rowId: string, y: number) {
 		this.ys[this.#getRowIndex(rowId)] = y;
@@ -103,26 +117,6 @@ export class LogisticRegressor {
 		}
 		return sigmoid(r);
 	}
-
-	// 	iterateWeights: 0.01416015625 ms compute mu
-	// logistic_regression.ts:74 iterateWeights: 2.294921875 ms adjust mu
-	// logistic_regression.ts:81 iterateWeights: 2.634033203125 ms compute diagonal
-	// logistic_regression.ts:89 iterateWeights: 71.906005859375 ms compute transpose
-	// logistic_regression.ts:92 iterateWeights: 73.701171875 ms compute hessian
-	// logistic_regression.ts:94 iterateWeights: 198.4970703125 ms compute inverse
-	// logistic_regression.ts:115 iterateWeights: 198.970947265625 ms compute exp2
-	// logistic_regression.ts:137 iterateWeights: 367.073974609375 ms compute weights
-	// logistic_regression.ts:139 iterateWeights: 375.93994140625 ms
-
-	// 	iterateWeights: 0.01513671875 ms compute mu
-	// logistic_regression.ts:84 iterateWeights: 2.301025390625 ms adjust mu
-	// logistic_regression.ts:91 iterateWeights: 2.830078125 ms compute diagonal
-	// logistic_regression.ts:94 iterateWeights: 3.10791015625 ms compute transpose
-	// logistic_regression.ts:97 iterateWeights: 5.135009765625 ms compute hessian
-	// logistic_regression.ts:99 iterateWeights: 20.071044921875 ms compute inverse
-	// logistic_regression.ts:118 iterateWeights: 21.076904296875 ms compute exp2
-	// logistic_regression.ts:138 iterateWeights: 31.834228515625 ms compute weights
-	// logistic_regression.ts:140 iterateWeights: 43.407958984375 ms
 
 	iterateWeights(count = 1) {
 		this.#applyMemberships();
@@ -185,17 +179,19 @@ export class LogisticRegressor {
 		this.weights = matrixTimesVector(matMul(exp1, xtranspose), exp2);
 		console.timeEnd('iterateWeights');
 	}
+
 	logLikelihood(): number {
 		// https://en.wikipedia.org/wiki/Logistic_regression#Likelihood_function
 		// L(w) = sum_i y_i * w' * x_i - log(1 + exp(w' * x_i))
-		const x = this.matrix;
-		const exp1 = matrixTimesVector(x, this.weights).map((x) => Math.exp(x));
-		const exp2 = exp1.map((x) => Math.log(1 + x));
-		return (
-			vecMul(this.ys, matrixTimesVector(x, this.weights)).reduce((a, b) => a + b) -
-			exp2.reduce((a, b) => a + b)
-		);
+		let r = 0.0;
+		for (let i = 0; i < this.ys.length; i++) {
+			const y = this.ys[i];
+			const mu = this.#inferenceRow(i);
+			r += y * Math.log(mu) + (1 - y) * Math.log(1 - mu);
+		}
+		return r;
 	}
+
 	train(iterations = 10) {
 		this.iterateWeights(iterations);
 	}
@@ -310,17 +306,6 @@ function matrixTimesVector(m: number[][], v: number[]): number[] {
 	return r;
 }
 
-function diag(v: number[]): number[][] {
-	const r: number[][] = [];
-	for (let i = 0; i < v.length; i++) {
-		r.push([]);
-		for (let j = 0; j < v.length; j++) {
-			r[i].push(i === j ? v[i] : 0);
-		}
-	}
-	return r;
-}
-
 function predictProbabilities(X: number[][], w: number[]) {
 	const n = X.length;
 	const p = new Array(n);
@@ -335,6 +320,9 @@ function predictProbabilities(X: number[][], w: number[]) {
 
 	return p;
 }
+
+/*
+buggy?
 
 function computeHessian(X: number[][], p: number[]) {
 	const n = X.length;
@@ -354,3 +342,4 @@ function computeHessian(X: number[][], p: number[]) {
 
 	return H;
 }
+*/

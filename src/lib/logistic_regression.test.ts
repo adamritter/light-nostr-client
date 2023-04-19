@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/ban-ts-comment */
 import { LogisticRegressor, transpose } from './logistic_regression';
 import { expect, test } from '@jest/globals';
 // @ts-ignore

@@ -1,9 +1,11 @@
+/* eslint-disable @typescript-eslint/ban-ts-comment */
 const showLikesAndCommentsAfterMs = 2000;
 const shouldShowComments = true;
 const shouldShowLikes = true;
 const mainEventCount = 100; // 100 is default
 const viewAsMainEventCount = 5;
 const RECURSIVELY_LOAD_REPLIES = true;
+const debugHelpers = false;
 
 import { nip19 } from 'nostr-tools';
 import TimeAgo from 'javascript-time-ago';
@@ -277,7 +279,9 @@ export async function handleRepliedToOrRootEvent(
 	redirectReferencedEvents(event2, eventRedirects);
 	const eventIdWithContent = event.id + ' ' + event.content;
 	const event2IdWithContent = event2.id + ' ' + event2.content;
-	console.log('event2', event2IdWithContent, ' for event ', eventIdWithContent);
+	if (debugHelpers) {
+		console.log('hepers: event2', event2IdWithContent, ' for event ', eventIdWithContent);
+	}
 	if (event2.kind != 1) {
 		console.log('kind != 1 for event2 ', event2.id);
 		return;
@@ -290,13 +294,15 @@ export async function handleRepliedToOrRootEvent(
 	counters.num_event2s++;
 	if (counters.num_event2s % 100 == 0) {
 		console.log(
-			'event2',
-			event2,
+			'num_event2s',
 			counters.num_event2s,
+			'elapsed',
 			Math.round((performance.now() - start2) / 100) / 10
 		);
 	}
-	console.log('fetching metadata for ', event2.pubkey, event2IdWithContent);
+	if (debugHelpers) {
+		console.log('helpers: fetching metadata for ', event2.pubkey, event2IdWithContent);
+	}
 	showNote(event2, relayPool, eventRedirects);
 	if (index < 10) {
 		showLikes(relayPool, event2, loggedInUser, logisticRegressor);
@@ -474,8 +480,6 @@ async function showNote(event: Event, relayPool: RelayPool, eventRedirects: Map<
 
 export async function subscribeCallback(
 	event: any,
-	afterEose: boolean,
-	url: string | undefined,
 	pubkey: string,
 	cancelled: () => boolean,
 	eventRedirects: Map<string, string>,
@@ -487,10 +491,9 @@ export async function subscribeCallback(
 	logisticRegressor: LogisticRegressor
 ) {
 	const eventIdWithContent = event.id + ' ' + event.content;
-	if (event.relays) {
-		throw new Error('event.relays should not be set');
+	if (debugHelpers) {
+		console.log('got event', eventIdWithContent, 'tags: ', JSON.stringify(event.tags));
 	}
-	console.log('got event', eventIdWithContent, 'tags: ', JSON.stringify(event.tags));
 	if (cancelled()) {
 		console.log('cancelled while trying to show event', eventIdWithContent);
 		return;
@@ -498,32 +501,37 @@ export async function subscribeCallback(
 	counters.num_events++;
 	if (counters.num_events % 50 == 0) {
 		console.log(
-			event,
-			afterEose,
-			url,
+			'num events',
 			counters.num_events,
+			'elapsed',
 			Math.round((performance.now() - start) / 100) / 10
 		);
 	}
 	const start2 = performance.now();
-	console.log('adding event to div ', eventIdWithContent);
+	if (debugHelpers) {
+		console.log('helpers: adding event to div ', eventIdWithContent);
+	}
 	showNote(event, relayPool, eventRedirects);
 	redirectReferencedEvents(event, eventRedirects);
-	console.log(
-		'calling subscribeReferencedEventsAndPrefetchMetadata, event: ',
-		JSON.stringify(event)
-	);
+	if (debugHelpers) {
+		console.log(
+			'helpers: calling subscribeReferencedEventsAndPrefetchMetadata, event: ',
+			JSON.stringify(event)
+		);
+	}
 
 	relayPool.subscribeReferencedEventsAndPrefetchMetadata(
 		event,
 		(event2: Event) => {
 			processEventForLogisticRegression(event2, logisticRegressor, loggedInUser, event2);
-			console.log(
-				'subscribeReferencedEventsAndPrefetchMetadata got event2',
-				event2.id,
-				event2.content,
-				JSON.stringify(event2.tags)
-			);
+			if (debugHelpers) {
+				console.log(
+					'subscribeReferencedEventsAndPrefetchMetadata got event2',
+					event2.id,
+					event2.content,
+					JSON.stringify(event2.tags)
+				);
+			}
 			handleRepliedToOrRootEvent(
 				event,
 				event2,
@@ -564,30 +572,27 @@ export async function subscribeToEvents(
 	loggedInUser: string | null
 ) {
 	const logisticRegressor = new LogisticRegressor();
+	// @ts-ignore
 	document.logisticRegressor = logisticRegressor;
 	let authors = [pubkey];
 	let thisMainEventCount = mainEventCount;
 	if (viewAs) {
+		console.log('viewing as', pubkey, 'fetching contact list...');
 		authors = (await relayPool.fetchAndCacheContactList(pubkey)).tags
 			.filter((tag: string[]) => tag[0] === 'p')
 			.map((tag: string[]) => tag[1]);
 		thisMainEventCount = viewAsMainEventCount;
+		console.log('viewing as', pubkey, 'contact list:', authors);
 	}
 	let index = 0;
 	relayPool.subscribe(
 		[{ authors, kinds: [1], limit: thisMainEventCount }],
 		undefined,
-		async (event: Event, afterEose: boolean, url: string) => {
+		(event: Event) => {
 			processEventForLogisticRegression(event, logisticRegressor, loggedInUser);
 			index++;
-			// @ts-ignore
-			if (event.relays) {
-				throw new Error('event.relays should not be set');
-			}
-			await subscribeCallback(
+			subscribeCallback(
 				event,
-				afterEose,
-				url,
 				pubkey,
 				cancelled,
 				eventRedirects,

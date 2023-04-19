@@ -90,7 +90,6 @@ export function processEventForLogisticRegression(
 					'likes',
 					logisticRegressor.get(parentEvent.id, 'likes') + 1
 				);
-				logisticRegressor.setGroup(parentEvent.id, 'likedby', event.pubkey);
 			}
 		}
 	}

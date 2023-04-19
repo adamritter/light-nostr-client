@@ -1,3 +1,5 @@
+const debugThreads = false;
+
 function getFinalElementId(eventId: string, eventRedirects: Map<string, string>): string {
 	const originalEventId = eventId;
 	if (!eventId) {
@@ -32,7 +34,9 @@ function moveElements(from: string, to: string, eventRedirects: Map<string, stri
 	if (from === to) {
 		return;
 	}
-	console.log('putUnder moveElements', from, to);
+	if (debugThreads) {
+		console.log('threads.ts: putUnder moveElements', from, to);
+	}
 	const fromHolder = document.getElementById(from);
 	const toHolder = document.getElementById(to);
 	if (fromHolder && toHolder) {
@@ -95,14 +99,16 @@ export function addEventRedirect(
 	const originalElementId = elementid;
 	holderElementId = getFinalElementId(holderElementId, eventRedirects);
 	elementid = getFinalElementId(elementid, eventRedirects);
-	console.log(
-		'threads.ts addEventRedirect',
-		originalHolderElementId,
-		originalElementId,
-		' -> ',
-		holderElementId,
-		elementid
-	);
+	if (debugThreads) {
+		console.log(
+			'threads.ts addEventRedirect',
+			originalHolderElementId,
+			originalElementId,
+			' -> ',
+			holderElementId,
+			elementid
+		);
+	}
 
 	if (elementid != holderElementId) {
 		mergeHolders(holderElementId, elementid, eventRedirects);
@@ -129,7 +135,9 @@ function createOrGetHolderElement(
 	const holderElementId = getFinalElementId(eventId, eventRedirects) + '_holder';
 	const existingHolderElement = document.getElementById(holderElementId);
 	if (existingHolderElement) {
-		console.log('threads.ts createOrGetHolderElement: holder already exists ' + holderElementId);
+		if (debugThreads) {
+			console.log('threads.ts createOrGetHolderElement: holder already exists ' + holderElementId);
+		}
 		// Update score
 		const oldScore = parseFloat(existingHolderElement.style.order);
 		if (oldScore > score) {
@@ -138,7 +146,9 @@ function createOrGetHolderElement(
 		}
 		return existingHolderElement;
 	}
-	console.log('threads.ts createOrGetHolderElement: create holder ' + holderElementId);
+	if (debugThreads) {
+		console.log('threads.ts createOrGetHolderElement: create holder ' + holderElementId);
+	}
 	const holderHtml = `<span id='${holderElementId}' style='border-bottom: solid white 2px; order: ${score}; display: flex;  flex-direction: column'></span>`;
 	const holderElement = htmlToElement(holderHtml);
 	const eventsElement = document.getElementById('events')!;
@@ -154,12 +164,16 @@ export function putUnder(
 	eventRedirects: Map<string, string>
 ) {
 	if (document.getElementById(eventId)) {
-		console.log('threads.ts putUnder: element already exists', eventId);
+		if (debugThreads) {
+			console.log('threads.ts putUnder: element already exists', eventId);
+		}
 		return;
 	}
 	const holderElement = createOrGetHolderElement(eventId, score, eventRedirects);
 	const element = htmlToElement(elementHTML);
-	console.log('threads.ts putUnder: add element', eventId, element.id, holderElement.id);
+	if (debugThreads) {
+		console.log('threads.ts putUnder: add element', eventId, element.id, holderElement.id);
+	}
 	element.id = eventId;
 	holderElement.appendChild(element);
 }
