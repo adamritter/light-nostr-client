@@ -3,7 +3,7 @@ const showLikesAndCommentsAfterMs = 2000;
 const shouldShowComments = true;
 const shouldShowLikes = true;
 const mainEventCount = 100; // 100 is default
-const viewAsMainEventCount = 5;
+const viewAsMainEventCount = 20;
 const RECURSIVELY_LOAD_REPLIES = true;
 const debugHelpers = false;
 
