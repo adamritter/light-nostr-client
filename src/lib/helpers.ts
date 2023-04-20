@@ -1,4 +1,6 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment */
+// TODO: Get likes for logged in user and simulate everything for those posts.
+
 const showLikesAndCommentsAfterMs = 2000;
 const shouldShowComments = true;
 const shouldShowLikes = true;
