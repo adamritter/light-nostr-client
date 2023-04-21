@@ -3,6 +3,9 @@
 import matrixInverse from 'matrix-inverse';
 
 export class LogisticRegressor {
+	hasRow(id: string) {
+		return this.rowIndices.has(id);
+	}
 	memberships: Map<string, Map<string, string>> = new Map();
 	setGroup(rowId: string, group: string, member: string) {
 		let groupMap = this.memberships.get(group);
@@ -33,6 +36,7 @@ export class LogisticRegressor {
 		this.matrix.push(new_row);
 		this.ys.push(onlyPositive ? 1 : 0);
 		this.onlyPositive.push(onlyPositive || false);
+		this.originalOnlyPositive.push(onlyPositive || false);
 		if (createdAt !== undefined) {
 			this.createdAt.push(createdAt);
 		}
@@ -102,6 +106,8 @@ export class LogisticRegressor {
 	// This array is used for items that are not in the random sample, but selected positive examples.
 	// The example status can change with addRow
 	onlyPositive: boolean[] = [];
+	// This is used for set() conditionally working so that likes / comments aren't counted twice
+	originalOnlyPositive: boolean[] = [];
 	#getRowIndex(rowId: string): number | undefined {
 		let rowIndex = this.rowIndices.get(rowId);
 		if (rowIndex === undefined) {
@@ -133,10 +139,16 @@ export class LogisticRegressor {
 		}
 	}
 
-	set(rowId: string, label: string, value: number) {
+	set(rowId: string, label: string, value: number, onlyPositive: boolean | undefined = undefined) {
 		const rowIndex = this.#getRowIndex(rowId);
 		if (rowIndex === undefined) {
 			return;
+		}
+		// onlyPositive can be used to prevent double counting
+		if (onlyPositive !== undefined) {
+			if (this.originalOnlyPositive[rowIndex] !== onlyPositive) {
+				return;
+			}
 		}
 		const labelIndex = this.#getLabelIndex(label);
 		this.matrix[rowIndex][labelIndex] = value;

@@ -39,18 +39,28 @@ import { Kind, type Event } from 'nostr-tools';
 // This can help identify the user's preferences for specific creators.
 const sentiment = new Sentiment();
 
+// Returns needChildren, in which case child likes / comments should be fetched.
+// This can be used to not process the same event twice (for example normal events vs positive examples)
 export function processEventForLogisticRegression(
 	event: Event,
 	logisticRegressor: LogisticRegressor,
 	loggedInUser: string | null,
 	parentEvent?: Event,
-	shown = true
-) {
+	shown = true,
+	// positiveExample is used to help more liked / commented events to help the classifier.
+	// logistic regression works much better if the number of positive and negative examples are balanced.
+	// The LogisticRegressor can do the reweighting of examples.
+	positiveExample = false
+): boolean {
 	if (!loggedInUser) {
-		return;
+		return false;
 	}
+	let needChildren = false;
 	if (event.kind === 1 && shown) {
-		logisticRegressor.addRow(event.id, event.created_at);
+		if (!logisticRegressor.hasRow(event.id)) {
+			needChildren = true;
+		}
+		logisticRegressor.addRow(event.id, event.created_at, positiveExample);
 	}
 	if (event.kind == 1) {
 		if (event.content.match(/png|jpg|jpeg|gif|webp/)) {
@@ -79,7 +89,8 @@ export function processEventForLogisticRegression(
 				logisticRegressor.set(
 					parentEvent.id,
 					'replies',
-					logisticRegressor.get(parentEvent.id, 'replies') + 1
+					logisticRegressor.get(parentEvent.id, 'replies') + 1,
+					positiveExample // prevent double counting
 				);
 			}
 		}
@@ -92,9 +103,11 @@ export function processEventForLogisticRegression(
 				logisticRegressor.set(
 					parentEvent.id,
 					'likes',
-					logisticRegressor.get(parentEvent.id, 'likes') + 1
+					logisticRegressor.get(parentEvent.id, 'likes') + 1,
+					positiveExample // prevent double counting
 				);
 			}
 		}
 	}
+	return needChildren;
 }

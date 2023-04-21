@@ -268,17 +268,11 @@ export async function renderNote(event: Event, relayPool: RelayPool) {
 export async function handleRepliedToOrRootEvent(
 	event: Event,
 	event2: Event,
-	relayPool: RelayPool,
-	pubkey: string,
-	cancelled: () => boolean,
-	eventRedirects: Map<string, string>,
-	counters: { num_event2s: number },
 	start2: number,
 	index: number,
-	loggedInUser: string | null,
-	logisticRegressor: LogisticRegressor
+	pageInfo: PageInfo
 ) {
-	redirectReferencedEvents(event2, eventRedirects);
+	redirectReferencedEvents(event2, pageInfo.eventRedirects);
 	const eventIdWithContent = event.id + ' ' + event.content;
 	const event2IdWithContent = event2.id + ' ' + event2.content;
 	if (debugHelpers) {
@@ -288,16 +282,16 @@ export async function handleRepliedToOrRootEvent(
 		console.log('kind != 1 for event2 ', event2.id);
 		return;
 	}
-	if (cancelled()) {
+	if (pageInfo.cancelled()) {
 		console.log('cancelled while trying to show event', event2IdWithContent);
 		return;
 	}
 
-	counters.num_event2s++;
-	if (counters.num_event2s % 100 == 0) {
+	pageInfo.counters.num_event2s++;
+	if (pageInfo.counters.num_event2s % 100 == 0) {
 		console.log(
 			'num_event2s',
-			counters.num_event2s,
+			pageInfo.counters.num_event2s,
 			'elapsed',
 			Math.round((performance.now() - start2) / 100) / 10
 		);
@@ -305,34 +299,27 @@ export async function handleRepliedToOrRootEvent(
 	if (debugHelpers) {
 		console.log('helpers: fetching metadata for ', event2.pubkey, event2IdWithContent);
 	}
-	showNote(event2, relayPool, eventRedirects);
+	showNote(event2, pageInfo.relayPool, pageInfo.eventRedirects);
 	if (index < 10) {
-		showLikes(relayPool, event2, loggedInUser, logisticRegressor);
+		showLikes(pageInfo.relayPool, event2, pageInfo.loggedInUser, pageInfo.logisticRegressor);
 	} else {
 		setTimeout(() => {
-			showLikes(relayPool, event2, loggedInUser, logisticRegressor);
+			showLikes(pageInfo.relayPool, event2, pageInfo.loggedInUser, pageInfo.logisticRegressor);
 		}, showLikesAndCommentsAfterMs);
 	}
-	redirectReferencedEvents(event, eventRedirects);
+	redirectReferencedEvents(event, pageInfo.eventRedirects);
 
 	if (RECURSIVELY_LOAD_REPLIES) {
-		relayPool.subscribeReferencedEventsAndPrefetchMetadata(
+		pageInfo.relayPool.subscribeReferencedEventsAndPrefetchMetadata(
 			event2,
 			(event3: Event) => {
-				processEventForLogisticRegression(event3, logisticRegressor, loggedInUser, event2);
-				handleRepliedToOrRootEvent(
-					event,
+				processEventForLogisticRegression(
 					event3,
-					relayPool,
-					pubkey,
-					cancelled,
-					eventRedirects,
-					counters,
-					start2,
-					index,
-					loggedInUser,
-					logisticRegressor
+					pageInfo.logisticRegressor,
+					pageInfo.loggedInUser,
+					event2
 				);
+				handleRepliedToOrRootEvent(event, event3, start2, index, pageInfo);
 			},
 			30,
 			undefined,
@@ -486,41 +473,30 @@ async function showNote(event: Event, relayPool: RelayPool, eventRedirects: Map<
 	putUnder(event.id, -event.created_at, noteHtml, eventRedirects);
 }
 
-export async function subscribeCallback(
-	event: any,
-	pubkey: string,
-	cancelled: () => boolean,
-	eventRedirects: Map<string, string>,
-	counters: { num_events: number; num_event2s: number },
-	start: number,
-	relayPool: RelayPool,
-	index: number,
-	loggedInUser: string | null,
-	logisticRegressor: LogisticRegressor
-) {
+export async function subscribeCallback(event: any, pageInfo: PageInfo, index: number) {
 	const eventIdWithContent = event.id + ' ' + event.content;
 	if (debugHelpers) {
 		console.log('got event', eventIdWithContent, 'tags: ', JSON.stringify(event.tags));
 	}
-	if (cancelled()) {
+	if (pageInfo.cancelled()) {
 		console.log('cancelled while trying to show event', eventIdWithContent);
 		return;
 	}
-	counters.num_events++;
-	if (counters.num_events % 50 == 0) {
+	pageInfo.counters.num_events++;
+	if (pageInfo.counters.num_events % 50 == 0) {
 		console.log(
 			'num events',
-			counters.num_events,
+			pageInfo.counters.num_events,
 			'elapsed',
-			Math.round((performance.now() - start) / 100) / 10
+			Math.round((performance.now() - pageInfo.start) / 100) / 10
 		);
 	}
 	const start2 = performance.now();
 	if (debugHelpers) {
 		console.log('helpers: adding event to div ', eventIdWithContent);
 	}
-	showNote(event, relayPool, eventRedirects);
-	redirectReferencedEvents(event, eventRedirects);
+	showNote(event, pageInfo.relayPool, pageInfo.eventRedirects);
+	redirectReferencedEvents(event, pageInfo.eventRedirects);
 	if (debugHelpers) {
 		console.log(
 			'helpers: calling subscribeReferencedEventsAndPrefetchMetadata, event: ',
@@ -528,10 +504,15 @@ export async function subscribeCallback(
 		);
 	}
 
-	relayPool.subscribeReferencedEventsAndPrefetchMetadata(
+	pageInfo.relayPool.subscribeReferencedEventsAndPrefetchMetadata(
 		event,
 		(event2: Event) => {
-			processEventForLogisticRegression(event2, logisticRegressor, loggedInUser, event2);
+			processEventForLogisticRegression(
+				event2,
+				pageInfo.logisticRegressor,
+				pageInfo.loggedInUser,
+				event2
+			);
 			if (debugHelpers) {
 				console.log(
 					'subscribeReferencedEventsAndPrefetchMetadata got event2',
@@ -540,34 +521,46 @@ export async function subscribeCallback(
 					JSON.stringify(event2.tags)
 				);
 			}
-			handleRepliedToOrRootEvent(
-				event,
-				event2,
-				relayPool,
-				pubkey,
-				cancelled,
-				eventRedirects,
-				counters,
-				start2,
-				index,
-				loggedInUser,
-				logisticRegressor
-			);
+			handleRepliedToOrRootEvent(event, event2, start2, index, pageInfo);
 		},
 		30,
 		undefined,
 		{ unsubscribeOnEose: true, defaultRelays: DEFAULT_RELAYS }
 	);
 	if (index < 10) {
-		showLikes(relayPool, event, loggedInUser, logisticRegressor);
-		showComments(relayPool, event, eventRedirects, loggedInUser, logisticRegressor);
+		showLikes(pageInfo.relayPool, event, pageInfo.loggedInUser, pageInfo.logisticRegressor);
+		showComments(
+			pageInfo.relayPool,
+			event,
+			pageInfo.eventRedirects,
+			pageInfo.loggedInUser,
+			pageInfo.logisticRegressor
+		);
 	} else {
 		setTimeout(() => {
-			showLikes(relayPool, event, loggedInUser, logisticRegressor);
-			showComments(relayPool, event, eventRedirects, loggedInUser, logisticRegressor);
+			showLikes(pageInfo.relayPool, event, pageInfo.loggedInUser, pageInfo.logisticRegressor);
+			showComments(
+				pageInfo.relayPool,
+				event,
+				pageInfo.eventRedirects,
+				pageInfo.loggedInUser,
+				pageInfo.logisticRegressor
+			);
 		}, showLikesAndCommentsAfterMs);
 	}
 }
+
+type PageInfo = {
+	relayPool: RelayPool;
+	eventRedirects: Map<string, string>;
+	counters: { num_events: number; num_event2s: number };
+	start: number;
+	pubkey: string;
+	cancelled: () => boolean;
+	viewAs: boolean;
+	loggedInUser: string | null;
+	logisticRegressor: LogisticRegressor;
+};
 
 export async function subscribeToEvents(
 	relayPool: RelayPool,
@@ -580,8 +573,21 @@ export async function subscribeToEvents(
 	loggedInUser: string | null
 ) {
 	const logisticRegressor = new LogisticRegressor();
+	const pageInfo: PageInfo = {
+		relayPool,
+		eventRedirects,
+		counters,
+		start,
+		pubkey,
+		cancelled,
+		viewAs,
+		loggedInUser,
+		logisticRegressor
+	};
 	// @ts-ignore
 	document.logisticRegressor = logisticRegressor;
+	// @ts-ignore
+	document.pageInfo = pageInfo;
 	let authors = [pubkey];
 	let thisMainEventCount = mainEventCount;
 	if (viewAs) {
@@ -599,18 +605,7 @@ export async function subscribeToEvents(
 		(event: Event) => {
 			processEventForLogisticRegression(event, logisticRegressor, loggedInUser);
 			index++;
-			subscribeCallback(
-				event,
-				pubkey,
-				cancelled,
-				eventRedirects,
-				counters,
-				start,
-				relayPool,
-				index,
-				loggedInUser,
-				logisticRegressor
-			);
+			subscribeCallback(event, pageInfo, index);
 		},
 		undefined,
 		undefined,
