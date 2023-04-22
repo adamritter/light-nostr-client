@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { RelayPool } from 'nostr-relaypool';
+	import { RelayPool, RelayPoolWorker } from 'nostr-relaypool';
 	import { onDestroy, onMount } from 'svelte';
-	import { subscribeToEvents } from './helpers';
+	import { newRelayPoolWorker, subscribeToEvents } from './helpers';
 
 	export let publicKey: string;
 	export let loggedInUser: string | null = null;
-	let relayPool: RelayPool | undefined;
+	let relayPool: RelayPool | undefined | RelayPoolWorker;
 	export let viewAs: boolean;
 	let cancelled = false;
 	let events: HTMLElement | null = null;
@@ -32,7 +32,8 @@
 		const start = performance.now();
 		const counters = { num_events: 0, num_event2s: 0 };
 		const redirectHolder = new Map();
-		relayPool = new RelayPool();
+		// relayPool = new RelayPool();
+		relayPool = newRelayPoolWorker();
 		let cancelled = false;
 		cancel = () => {
 			cancelled = true;

@@ -12,7 +12,7 @@
 	import Profile from '$lib/profile.svelte';
 	import { onMount } from 'svelte';
 	import { RelayPool } from 'nostr-relaypool';
-	import { npubDecode } from '$lib/helpers';
+	import { newRelayPoolWorker, npubDecode } from '$lib/helpers';
 	import Feed from '$lib/feed.svelte';
 	import { page } from '$app/stores';
 	import { nip19 } from 'nostr-tools';
@@ -31,7 +31,8 @@
 
 	let publicKey = npubDecode($page.params.npub);
 
-	let relayPool: RelayPool = new RelayPool(undefined, { logSubscriptions: true });
+	let relayPool = newRelayPoolWorker();
+
 	let nostr: any = null;
 	onMount(() => {
 		// @ts-ignore

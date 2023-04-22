@@ -14,6 +14,7 @@ import TimeAgo from 'javascript-time-ago';
 import type { Event } from 'nostr-tools';
 import { LogisticRegressor } from './logistic_regression';
 import { processEventForLogisticRegression } from './ranking';
+import { RelayPoolWorker } from 'nostr-relaypool';
 
 // English.
 import en from 'javascript-time-ago/locale/en';
@@ -563,7 +564,7 @@ type PageInfo = {
 };
 
 export async function subscribeToEvents(
-	relayPool: RelayPool,
+	relayPool: RelayPool | RelayPoolWorker,
 	eventRedirects: Map<string, string>,
 	counters: { num_events: number; num_event2s: number },
 	start: number,
@@ -626,4 +627,12 @@ function clearSearchResults() {
 		// @ts-ignore
 		q.value = '';
 	}
+}
+
+export function newRelayPoolWorker(): RelayPoolWorker {
+	const worker = new Worker(
+		new URL('./node_modules/nostr-relaypool/lib/nostr-relaypool.worker.js', document.location.href)
+	);
+	const relayPool = new RelayPoolWorker(worker);
+	return relayPool;
 }

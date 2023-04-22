@@ -40,7 +40,7 @@
 		"javascript-time-ago": "^2.5.9",
 		"jest": "^29.5.0",
 		"matrix-inverse": "2.0.0",
-		"nostr-relaypool": "^0.6.18",
+		"nostr-relaypool": "^0.6.19",
 		"nostr-tools": "^1.8.1",
 		"pnpm": "^8.3.0",
 		"sentiment": "^5.0.2",
