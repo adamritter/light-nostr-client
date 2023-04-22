@@ -630,9 +630,8 @@ function clearSearchResults() {
 }
 
 export function newRelayPoolWorker(): RelayPoolWorker {
-	const worker = new Worker(
-		new URL('./node_modules/nostr-relaypool/lib/nostr-relaypool.worker.js', document.location.href)
-	);
+	const worker = new Worker(new URL('./nostr-relaypool.worker.js', document.location.href));
+
 	const relayPool = new RelayPoolWorker(worker);
 	return relayPool;
 }

@@ -21,7 +21,7 @@
 
 	let publicKey = npubDecode($page.params.npub);
 
-	let relayPool = newRelayPoolWorker();
+	let relayPool = new RelayPool();
 	let nostr: any = null;
 	onMount(() => {
 		// @ts-ignore
