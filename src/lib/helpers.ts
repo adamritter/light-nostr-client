@@ -383,7 +383,9 @@ function showLikes(
 			const reactionEventDiv = document.getElementById(event.id + 'likes');
 			if (reactionEventDiv) {
 				reactionEventDiv.onclick = () => {
+					console.log('onclick', loggedInUser, signEvent);
 					if (!loggedInUserLiked && loggedInUser && signEvent) {
+						console.log('onclick2');
 						const unsignedEvent: UnsignedEvent = {
 							kind: 7,
 							tags: [['e', event.id]],
@@ -391,7 +393,8 @@ function showLikes(
 							created_at: new Date().getTime(),
 							pubkey: loggedInUser!
 						};
-						signEvent!(unsignedEvent).then((signedEvent) => {
+						signEvent?.(unsignedEvent).then((signedEvent) => {
+							console.log('now publishing reaction event');
 							relayPool.publish(signedEvent, DEFAULT_RELAYS);
 						});
 					}
@@ -700,7 +703,7 @@ export async function subscribeToEvents(
 
 export function windowNostr() {
 	// @ts-ignore
-	return document?.window?.nostr;
+	return window?.nostr;
 }
 
 function clearSearchResults() {

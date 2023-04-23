@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { signEvent, type UnsignedEvent } from 'nostr-tools';
 	const USE_WORKER = true;
 
 	import { RelayPool, RelayPoolWorker } from 'nostr-relaypool';
@@ -44,6 +45,8 @@
 			cancelled = true;
 			relayPool?.close();
 		};
+		const signEvent = (event: UnsignedEvent) => window?.nostr?.signEvent(event);
+		console.log('wnostr', windowNostr(), 'signevent0', signEvent);
 
 		subscribeToEvents(
 			relayPool,
@@ -54,7 +57,7 @@
 			() => cancelled,
 			viewAs,
 			loggedInUser,
-			windowNostr()?.signEvent
+			signEvent
 		);
 	}
 	onMount(async () => {
