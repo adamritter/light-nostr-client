@@ -122,7 +122,11 @@ export function writeRelaysForContactList(contactList?: { content: string }) {
 	return relays;
 }
 
-export async function replaceReferences(event: Event, content: string, relayPool: RelayPool) {
+export async function replaceReferences(
+	event: Event,
+	content: string,
+	relayPool: RelayPool | RelayPoolWorker
+) {
 	// find #[number]
 	const matches = content.match(/#\[[0-9]+\]/g);
 	// which metadata.tags does it map to?
@@ -205,7 +209,7 @@ export const escapeHtml = (unsafe: string) => {
 		.replaceAll("'", '&#039;');
 };
 
-export async function renderNote(event: Event, relayPool: RelayPool) {
+export async function renderNote(event: Event, relayPool: RelayPool | RelayPoolWorker) {
 	const pubkey = event.pubkey;
 	const metadata = await relayPool.fetchAndCacheMetadata(pubkey);
 	const infoMetadata = parseJSON(metadata?.content) as MetadataContent;
@@ -330,7 +334,7 @@ export async function handleRepliedToOrRootEvent(
 }
 
 function showLikes(
-	relayPool: RelayPool,
+	relayPool: RelayPool | RelayPoolWorker,
 	event: Event,
 	loggedInUser: string | null,
 	logisticRegressor: LogisticRegressor
@@ -411,7 +415,7 @@ function redirectReferencedEvents(event: Event, eventRedirects: Map<string, stri
 }
 
 function showComments(
-	relayPool: RelayPool,
+	relayPool: RelayPool | RelayPoolWorker,
 	event: Event,
 	eventRedirects: Map<string, string>,
 	loggedInUser: string | null,
@@ -469,7 +473,11 @@ function showComments(
 	}
 }
 
-async function showNote(event: Event, relayPool: RelayPool, eventRedirects: Map<string, string>) {
+async function showNote(
+	event: Event,
+	relayPool: RelayPool | RelayPoolWorker,
+	eventRedirects: Map<string, string>
+) {
 	const noteHtml = await renderNote(event, relayPool);
 	putUnder(event.id, -event.created_at, noteHtml, eventRedirects);
 }
@@ -552,7 +560,7 @@ export async function subscribeCallback(event: any, pageInfo: PageInfo, index: n
 }
 
 type PageInfo = {
-	relayPool: RelayPool;
+	relayPool: RelayPool | RelayPoolWorker;
 	eventRedirects: Map<string, string>;
 	counters: { num_events: number; num_event2s: number };
 	start: number;
@@ -562,6 +570,8 @@ type PageInfo = {
 	loggedInUser: string | null;
 	logisticRegressor: LogisticRegressor;
 };
+
+const fetchPositiveExamples = false;
 
 export async function subscribeToEvents(
 	relayPool: RelayPool | RelayPoolWorker,
@@ -612,6 +622,37 @@ export async function subscribeToEvents(
 		undefined,
 		{ defaultRelays: DEFAULT_RELAYS }
 	);
+
+	if (loggedInUser && fetchPositiveExamples) {
+		// Subscribe to events liked by the logged-in user
+		relayPool.subscribe(
+			[{ authors: [loggedInUser], kinds: [7], limit: thisMainEventCount }],
+			undefined,
+			async (likeEvent: Event) => {
+				relayPool.subscribeReferencedEvents(
+					likeEvent,
+					(likedNote: Event) => {
+						const index = counters.num_events + 1;
+						processEventForLogisticRegression(
+							likedNote,
+							logisticRegressor,
+							loggedInUser,
+							undefined,
+							true,
+							true
+						);
+						subscribeCallback(likedNote, pageInfo, index);
+					},
+					200,
+					undefined,
+					{ defaultRelays: DEFAULT_RELAYS, unsubscribeOnEose: true }
+				);
+			},
+			undefined,
+			undefined,
+			{ defaultRelays: DEFAULT_RELAYS }
+		);
+	}
 }
 
 export function windowNostr() {

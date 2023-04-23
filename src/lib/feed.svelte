@@ -1,4 +1,6 @@
 <script lang="ts">
+	const USE_WORKER = true;
+
 	import { RelayPool, RelayPoolWorker } from 'nostr-relaypool';
 	import { onDestroy, onMount } from 'svelte';
 	import { newRelayPoolWorker, subscribeToEvents } from './helpers';
@@ -32,8 +34,11 @@
 		const start = performance.now();
 		const counters = { num_events: 0, num_event2s: 0 };
 		const redirectHolder = new Map();
-		// relayPool = new RelayPool();
-		relayPool = newRelayPoolWorker();
+		if (USE_WORKER) {
+			relayPool = newRelayPoolWorker();
+		} else {
+			relayPool = new RelayPool();
+		}
 		let cancelled = false;
 		cancel = () => {
 			cancelled = true;
