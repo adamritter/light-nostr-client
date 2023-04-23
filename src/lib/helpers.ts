@@ -278,6 +278,10 @@ export async function handleRepliedToOrRootEvent(
 	index: number,
 	pageInfo: PageInfo
 ) {
+	if (pageInfo.handledEvents.has(event2.id)) {
+		return;
+	}
+	pageInfo.handledEvents.add(event2.id);
 	redirectReferencedEvents(event2, pageInfo.eventRedirects);
 	const eventIdWithContent = event.id + ' ' + event.content;
 	const event2IdWithContent = event2.id + ' ' + event2.content;
@@ -346,6 +350,27 @@ export async function handleRepliedToOrRootEvent(
 	}
 }
 
+function displayLikes(eventId: string, reactions: Map<string, number>, loggedInUserLiked: boolean) {
+	const reactionEventDiv = document.getElementById(eventId + 'likes');
+	if (reactionEventDiv) {
+		let reactionHTML = '';
+		for (const [k, v] of reactions) {
+			if (k === '♡' && loggedInUserLiked) {
+				reactionHTML += '❤️';
+			} else {
+				reactionHTML += k;
+			}
+			if (v > 0) {
+				reactionHTML += ' ' + v.toString();
+			} else {
+				reactionHTML += ' ';
+			}
+		}
+
+		reactionEventDiv.innerHTML = ' ' + reactionHTML;
+	}
+}
+
 function showLikes(
 	relayPool: RelayPool | RelayPoolWorker,
 	event: Event,
@@ -359,6 +384,31 @@ function showLikes(
 	const reactions: Map<string, number> = new Map();
 	reactions.set('♡', 0);
 	let loggedInUserLiked = false;
+	const reactionEventDiv = document.getElementById(event.id + 'likes');
+	if (reactionEventDiv) {
+		reactionEventDiv.onclick = () => {
+			console.log('onclick', loggedInUser, signEvent);
+			if (!loggedInUserLiked && loggedInUser && signEvent) {
+				const unsignedEvent: UnsignedEvent = {
+					kind: 7,
+					tags: [
+						['e', event.id],
+						['p', event.pubkey]
+					],
+					content: '♡',
+					created_at: new Date().getTime(),
+					pubkey: loggedInUser!
+				};
+				console.log('onclick2', unsignedEvent);
+				signEvent?.(unsignedEvent).then((signedEvent) => {
+					console.log('onclick3 now publishing reaction event', signedEvent);
+					relayPool.publish(signedEvent, DEFAULT_RELAYS);
+					loggedInUserLiked = true;
+					displayLikes(event.id, reactions, loggedInUserLiked);
+				});
+			}
+		};
+	}
 	relayPool.subscribe(
 		[{ '#e': [event.id], kinds: [7], limit: 100 }],
 		DEFAULT_RELAYS,
@@ -380,41 +430,7 @@ function showLikes(
 				}
 			}
 			reactions.set(reaction, (reactions.get(reaction) || 0) + 1);
-			const reactionEventDiv = document.getElementById(event.id + 'likes');
-			if (reactionEventDiv) {
-				reactionEventDiv.onclick = () => {
-					console.log('onclick', loggedInUser, signEvent);
-					if (!loggedInUserLiked && loggedInUser && signEvent) {
-						console.log('onclick2');
-						const unsignedEvent: UnsignedEvent = {
-							kind: 7,
-							tags: [['e', event.id]],
-							content: '♡',
-							created_at: new Date().getTime(),
-							pubkey: loggedInUser!
-						};
-						signEvent?.(unsignedEvent).then((signedEvent) => {
-							console.log('now publishing reaction event');
-							relayPool.publish(signedEvent, DEFAULT_RELAYS);
-						});
-					}
-				};
-				let reactionHTML = '';
-				for (const [k, v] of reactions) {
-					if (k === '♡' && loggedInUserLiked) {
-						reactionHTML += '❤️';
-					} else {
-						reactionHTML += k;
-					}
-					if (v > 0) {
-						reactionHTML += ' ' + v.toString();
-					} else {
-						reactionHTML += ' ';
-					}
-				}
-
-				reactionEventDiv.innerHTML = ' ' + reactionHTML;
-			}
+			displayLikes(event.id, reactions, loggedInUserLiked);
 		},
 		200,
 		undefined,
@@ -514,6 +530,11 @@ async function showNote(
 }
 
 export async function subscribeCallback(event: any, pageInfo: PageInfo, index: number) {
+	if (pageInfo.handledEvents.has(event.id)) {
+		return;
+	}
+	pageInfo.handledEvents.add(event.id);
+
 	const eventIdWithContent = event.id + ' ' + event.content;
 	if (debugHelpers) {
 		console.log('got event', eventIdWithContent, 'tags: ', JSON.stringify(event.tags));
@@ -613,6 +634,7 @@ type PageInfo = {
 	loggedInUser: string | null;
 	logisticRegressor: LogisticRegressor;
 	signEvent?: (event: UnsignedEvent) => Promise<Event>;
+	handledEvents: Set<string>;
 };
 
 const fetchPositiveExamples = false;
@@ -639,7 +661,8 @@ export async function subscribeToEvents(
 		viewAs,
 		loggedInUser,
 		logisticRegressor,
-		signEvent
+		signEvent,
+		handledEvents: new Set()
 	};
 	// @ts-ignore
 	document.logisticRegressor = logisticRegressor;
@@ -721,4 +744,13 @@ export function newRelayPoolWorker(): RelayPoolWorker {
 
 	const relayPool = new RelayPoolWorker(worker);
 	return relayPool;
+}
+
+export function nsecDecode(nsec: string): string | undefined {
+	if (nsec && nsec.length == 63 && nsec.slice(0, 4) === 'nsec') {
+		const decoded = nip19.decode(nsec);
+		if (decoded) {
+			return decoded.data as string;
+		}
+	}
 }

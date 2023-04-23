@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { signEvent, type UnsignedEvent } from 'nostr-tools';
-	const USE_WORKER = true;
+	const USE_WORKER = false;
 
 	import { RelayPool, RelayPoolWorker } from 'nostr-relaypool';
 	import { onDestroy, onMount } from 'svelte';
-	import { newRelayPoolWorker, subscribeToEvents, windowNostr } from './helpers';
+	import { newRelayPoolWorker, nsecDecode, subscribeToEvents, windowNostr } from './helpers';
+	import { getEventHash, signEvent, type Event, type UnsignedEvent } from 'nostr-tools';
 
 	export let publicKey: string;
 	export let loggedInUser: string | null = null;
@@ -19,6 +19,19 @@
 
 	let cancel = () => {};
 	let subscribedParams: any = undefined;
+
+	async function signEventFn(event: UnsignedEvent): Promise<Event> {
+		if (localStorage.getItem('privateKey')) {
+			let id = getEventHash(event);
+			return {
+				...event,
+				id,
+				sig: signEvent(event, nsecDecode(localStorage.getItem('privateKey')!)!)
+			} as Event;
+		}
+		// @ts-ignore
+		return window?.nostr?.signEvent(event);
+	}
 
 	function resubscribe() {
 		if (!events) return;
@@ -45,8 +58,10 @@
 			cancelled = true;
 			relayPool?.close();
 		};
-		const signEvent = (event: UnsignedEvent) => window?.nostr?.signEvent(event);
-		console.log('wnostr', windowNostr(), 'signevent0', signEvent);
+		// @ts-ignore
+		const signEventFn2 =
+			// @ts-ignore
+			localStorage.getItem('privateKey') || window?.nostr?.signEvent ? signEventFn : undefined;
 
 		subscribeToEvents(
 			relayPool,
@@ -57,7 +72,7 @@
 			() => cancelled,
 			viewAs,
 			loggedInUser,
-			signEvent
+			signEventFn2
 		);
 	}
 	onMount(async () => {
@@ -75,5 +90,5 @@
 
 <div
 	id="events"
-	style="flex-grow: 4; display: flex; flex-direction: column; max-width: 70%; overflow: hidden"
+	style="flex-grow: 4; display: flex; flex-direction: column; max-width: 100%; overflow: hidden"
 />
