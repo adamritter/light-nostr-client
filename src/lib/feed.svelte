@@ -3,7 +3,7 @@
 
 	import { RelayPool, RelayPoolWorker } from 'nostr-relaypool';
 	import { onDestroy, onMount } from 'svelte';
-	import { newRelayPoolWorker, subscribeToEvents } from './helpers';
+	import { newRelayPoolWorker, subscribeToEvents, windowNostr } from './helpers';
 
 	export let publicKey: string;
 	export let loggedInUser: string | null = null;
@@ -53,7 +53,8 @@
 			publicKey,
 			() => cancelled,
 			viewAs,
-			loggedInUser
+			loggedInUser,
+			windowNostr()?.signEvent
 		);
 	}
 	onMount(async () => {

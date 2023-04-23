@@ -9,7 +9,7 @@ const viewAsMainEventCount = 20;
 const RECURSIVELY_LOAD_REPLIES = true;
 const debugHelpers = false;
 
-import { nip19 } from 'nostr-tools';
+import { nip19, type UnsignedEvent } from 'nostr-tools';
 import TimeAgo from 'javascript-time-ago';
 import type { Event } from 'nostr-tools';
 import { LogisticRegressor } from './logistic_regression';
@@ -20,6 +20,7 @@ import { RelayPoolWorker } from 'nostr-relaypool';
 import en from 'javascript-time-ago/locale/en';
 import type { RelayPool } from 'nostr-relaypool';
 import { addEventRedirect, putUnder } from './threads';
+import { page } from '$app/stores';
 TimeAgo.addLocale(en);
 
 // Create formatter (English).
@@ -306,10 +307,22 @@ export async function handleRepliedToOrRootEvent(
 	}
 	showNote(event2, pageInfo.relayPool, pageInfo.eventRedirects);
 	if (index < 10) {
-		showLikes(pageInfo.relayPool, event2, pageInfo.loggedInUser, pageInfo.logisticRegressor);
+		showLikes(
+			pageInfo.relayPool,
+			event2,
+			pageInfo.loggedInUser,
+			pageInfo.logisticRegressor,
+			pageInfo.signEvent
+		);
 	} else {
 		setTimeout(() => {
-			showLikes(pageInfo.relayPool, event2, pageInfo.loggedInUser, pageInfo.logisticRegressor);
+			showLikes(
+				pageInfo.relayPool,
+				event2,
+				pageInfo.loggedInUser,
+				pageInfo.logisticRegressor,
+				pageInfo.signEvent
+			);
 		}, showLikesAndCommentsAfterMs);
 	}
 	redirectReferencedEvents(event, pageInfo.eventRedirects);
@@ -337,7 +350,8 @@ function showLikes(
 	relayPool: RelayPool | RelayPoolWorker,
 	event: Event,
 	loggedInUser: string | null,
-	logisticRegressor: LogisticRegressor
+	logisticRegressor: LogisticRegressor,
+	signEvent?: (event: UnsignedEvent) => Promise<Event>
 ) {
 	if (!shouldShowLikes) {
 		return;
@@ -368,6 +382,20 @@ function showLikes(
 			reactions.set(reaction, (reactions.get(reaction) || 0) + 1);
 			const reactionEventDiv = document.getElementById(event.id + 'likes');
 			if (reactionEventDiv) {
+				reactionEventDiv.onclick = () => {
+					if (!loggedInUserLiked && loggedInUser && signEvent) {
+						const unsignedEvent: UnsignedEvent = {
+							kind: 7,
+							tags: [['e', event.id]],
+							content: '♡',
+							created_at: new Date().getTime(),
+							pubkey: loggedInUser!
+						};
+						signEvent!(unsignedEvent).then((signedEvent) => {
+							relayPool.publish(signedEvent, DEFAULT_RELAYS);
+						});
+					}
+				};
 				let reactionHTML = '';
 				for (const [k, v] of reactions) {
 					if (k === '♡' && loggedInUserLiked) {
@@ -537,7 +565,13 @@ export async function subscribeCallback(event: any, pageInfo: PageInfo, index: n
 		{ unsubscribeOnEose: true, defaultRelays: DEFAULT_RELAYS }
 	);
 	if (index < 10) {
-		showLikes(pageInfo.relayPool, event, pageInfo.loggedInUser, pageInfo.logisticRegressor);
+		showLikes(
+			pageInfo.relayPool,
+			event,
+			pageInfo.loggedInUser,
+			pageInfo.logisticRegressor,
+			pageInfo.signEvent
+		);
 		showComments(
 			pageInfo.relayPool,
 			event,
@@ -547,7 +581,13 @@ export async function subscribeCallback(event: any, pageInfo: PageInfo, index: n
 		);
 	} else {
 		setTimeout(() => {
-			showLikes(pageInfo.relayPool, event, pageInfo.loggedInUser, pageInfo.logisticRegressor);
+			showLikes(
+				pageInfo.relayPool,
+				event,
+				pageInfo.loggedInUser,
+				pageInfo.logisticRegressor,
+				pageInfo.signEvent
+			);
 			showComments(
 				pageInfo.relayPool,
 				event,
@@ -569,6 +609,7 @@ type PageInfo = {
 	viewAs: boolean;
 	loggedInUser: string | null;
 	logisticRegressor: LogisticRegressor;
+	signEvent?: (event: UnsignedEvent) => Promise<Event>;
 };
 
 const fetchPositiveExamples = false;
@@ -581,7 +622,8 @@ export async function subscribeToEvents(
 	pubkey: string,
 	cancelled: () => boolean,
 	viewAs: boolean,
-	loggedInUser: string | null
+	loggedInUser: string | null,
+	signEvent?: (event: UnsignedEvent) => Promise<Event>
 ) {
 	const logisticRegressor = new LogisticRegressor();
 	const pageInfo: PageInfo = {
@@ -593,7 +635,8 @@ export async function subscribeToEvents(
 		cancelled,
 		viewAs,
 		loggedInUser,
-		logisticRegressor
+		logisticRegressor,
+		signEvent
 	};
 	// @ts-ignore
 	document.logisticRegressor = logisticRegressor;
@@ -657,7 +700,7 @@ export async function subscribeToEvents(
 
 export function windowNostr() {
 	// @ts-ignore
-	return document && document.window.nostr;
+	return document?.window?.nostr;
 }
 
 function clearSearchResults() {
