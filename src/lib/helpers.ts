@@ -1,13 +1,17 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 // TODO: Get likes for logged in user and simulate everything for those posts.
 
-const showLikesAndCommentsAfterMs = 2000;
+const showLikesAndCommentsAfterMs = 2000; // 2000 is defualt?
 const shouldShowComments = true;
+const COMMENTS_TIMEOUT = 2000;
 const shouldShowLikes = true;
+const LIKES_TIMEOUT = 2000;
 const mainEventCount = 100; // 100 is default
 const viewAsMainEventCount = 20;
 const RECURSIVELY_LOAD_REPLIES = true;
 const debugHelpers = false;
+const MAX_DELAY_MS_REFERENCE = 1000; // 1000 is default?
+const positiveExampleCount = 300;
 
 import { nip19, type UnsignedEvent } from 'nostr-tools';
 import TimeAgo from 'javascript-time-ago';
@@ -136,7 +140,7 @@ export async function replaceReferences(
 			const index = parseInt(match.substring(2, match.length - 1));
 			const tag = event.tags[index];
 			if (tag && tag[1]) {
-				const tagMetadata = await relayPool.fetchAndCacheMetadata(tag[1]);
+				const tagMetadata = await relayPool.fetchAndCacheMetadata(tag[1]).catch((e) => {});
 				if (tagMetadata) {
 					const infoMetadata = parseJSON(tagMetadata.content) as MetadataContent;
 					if (infoMetadata?.display_name) {
@@ -212,7 +216,10 @@ export const escapeHtml = (unsafe: string) => {
 
 export async function renderNote(event: Event, relayPool: RelayPool | RelayPoolWorker) {
 	const pubkey = event.pubkey;
-	const metadata = await relayPool.fetchAndCacheMetadata(pubkey);
+	const metadata = await relayPool.fetchAndCacheMetadata(pubkey).catch((_) => null);
+	if (!metadata) {
+		return;
+	}
 	const infoMetadata = parseJSON(metadata?.content) as MetadataContent;
 	const body = [];
 	const picture = infoMetadata?.picture;
@@ -343,7 +350,7 @@ export async function handleRepliedToOrRootEvent(
 				);
 				handleRepliedToOrRootEvent(event, event3, start2, index, pageInfo);
 			},
-			30,
+			MAX_DELAY_MS_REFERENCE,
 			undefined,
 			{ unsubscribeOnEose: true, defaultRelays: DEFAULT_RELAYS }
 		);
@@ -432,7 +439,7 @@ function showLikes(
 			reactions.set(reaction, (reactions.get(reaction) || 0) + 1);
 			displayLikes(event.id, reactions, loggedInUserLiked);
 		},
-		200,
+		LIKES_TIMEOUT,
 		undefined,
 		{ unsubscribeOnEose: true }
 	);
@@ -510,7 +517,7 @@ function showComments(
 				commentsEventDiv.onclick = expandComments;
 			}
 		},
-		200,
+		COMMENTS_TIMEOUT,
 		undefined,
 		{ unsubscribeOnEose: true }
 	);
@@ -584,7 +591,7 @@ export async function subscribeCallback(event: any, pageInfo: PageInfo, index: n
 			}
 			handleRepliedToOrRootEvent(event, event2, start2, index, pageInfo);
 		},
-		30,
+		MAX_DELAY_MS_REFERENCE,
 		undefined,
 		{ unsubscribeOnEose: true, defaultRelays: DEFAULT_RELAYS }
 	);
@@ -637,7 +644,7 @@ type PageInfo = {
 	handledEvents: Set<string>;
 };
 
-const fetchPositiveExamples = false;
+const fetchPositiveExamples = true;
 
 export async function subscribeToEvents(
 	relayPool: RelayPool | RelayPoolWorker,
@@ -672,7 +679,11 @@ export async function subscribeToEvents(
 	let thisMainEventCount = mainEventCount;
 	if (viewAs) {
 		console.log('viewing as', pubkey, 'fetching contact list...');
-		authors = (await relayPool.fetchAndCacheContactList(pubkey)).tags
+		authors = (
+			await relayPool.fetchAndCacheContactList(pubkey).catch((e: Error) => {
+				return { tags: [] };
+			})
+		).tags
 			.filter((tag: string[]) => tag[0] === 'p')
 			.map((tag: string[]) => tag[1]);
 		thisMainEventCount = viewAsMainEventCount;
@@ -695,7 +706,7 @@ export async function subscribeToEvents(
 	if (loggedInUser && fetchPositiveExamples) {
 		// Subscribe to events liked by the logged-in user
 		relayPool.subscribe(
-			[{ authors: [loggedInUser], kinds: [7], limit: thisMainEventCount }],
+			[{ authors: [loggedInUser], kinds: [7], limit: positiveExampleCount }],
 			undefined,
 			async (likeEvent: Event) => {
 				relayPool.subscribeReferencedEvents(
@@ -712,7 +723,7 @@ export async function subscribeToEvents(
 						);
 						subscribeCallback(likedNote, pageInfo, index);
 					},
-					200,
+					MAX_DELAY_MS_REFERENCE,
 					undefined,
 					{ defaultRelays: DEFAULT_RELAYS, unsubscribeOnEose: true }
 				);
@@ -739,10 +750,15 @@ function clearSearchResults() {
 	}
 }
 
-export function newRelayPoolWorker(): RelayPoolWorker {
+export function newRelayPoolWorker(
+	relays?: string[],
+	options?: {
+		logSubscriptions?: boolean;
+	}
+): RelayPoolWorker {
 	const worker = new Worker(new URL('./nostr-relaypool.worker.js', document.location.href));
 
-	const relayPool = new RelayPoolWorker(worker);
+	const relayPool = new RelayPoolWorker(worker, relays, options);
 	return relayPool;
 }
 

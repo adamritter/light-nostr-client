@@ -98,7 +98,7 @@ export class LogisticRegressor {
 	}
 	weights: number[] = [0];
 	matrix: number[][] = [];
-	labels: Map<string, number> = new Map();
+	labels: Map<string, number> = new Map().set('bias', 0);
 	rowIndices: Map<string, number> = new Map();
 	ys: number[] = [];
 	createdAt: number[] = [];
@@ -272,25 +272,122 @@ export class LogisticRegressor {
 		);
 		// now go through all labels
 		for (const label of this.labels.keys()) {
-			const labelIndex = this.#getLabelIndex(label);
-			const weights = weightedLogisticRegression(
-				trainMatrix.map((v) => [v[0], v[labelIndex]]),
-				[0, 0],
-				trainYs,
-				dataWeights,
-				count
-			);
-			console.log(
-				label,
-				'evaluate: log likelihood',
-				weightedLogLikelihood(
-					testMatrix.map((v) => [v[0], v[labelIndex]]),
-					weights,
-					testYs,
-					dataWeights
-				)
-			);
+			if (label != 'bias') {
+				this.#evaluateLabels(
+					['bias', label],
+					trainMatrix,
+					trainYs,
+					dataWeights,
+					count,
+					testMatrix,
+					testYs
+				);
+				this.#evaluateLabels(
+					['bias', 'log_' + label],
+					trainMatrix,
+					trainYs,
+					dataWeights,
+					count,
+					testMatrix,
+					testYs
+				);
+			}
 		}
+		this.#evaluateLabels(
+			['bias', 'log_replies'],
+			trainMatrix,
+			trainYs,
+			dataWeights,
+			count,
+			testMatrix,
+			testYs
+		);
+
+		this.#evaluateLabels(
+			['bias', 'is_reply', 'replies'],
+			trainMatrix,
+			trainYs,
+			dataWeights,
+			count,
+			testMatrix,
+			testYs
+		);
+		this.#evaluateLabels(
+			['bias', 'is_reply', 'log_replies'],
+			trainMatrix,
+			trainYs,
+			dataWeights,
+			count,
+			testMatrix,
+			testYs
+		);
+
+		this.#evaluateLabels(
+			['bias', 'is_reply', 'log_replies', 'reply_to_user'],
+			trainMatrix,
+			trainYs,
+			dataWeights,
+			count,
+			testMatrix,
+			testYs
+		);
+		this.#evaluateLabels(
+			['bias', 'is_reply', 'log_replies', 'reply_to_user', 'log_length'],
+			trainMatrix,
+			trainYs,
+			dataWeights,
+			count,
+			testMatrix,
+			testYs
+		);
+		this.#evaluateLabels(
+			['bias', 'is_reply', 'log_replies', 'reply_to_user', 'log_length', 'image'],
+			trainMatrix,
+			trainYs,
+			dataWeights,
+			count,
+			testMatrix,
+			testYs
+		);
+	}
+
+	#evaluateLabels(
+		labels: string[],
+		trainMatrix: number[][],
+		trainYs: number[],
+		dataWeights: number[] | undefined,
+		steps: number,
+		testMatrix: number[][],
+		testYs: number[]
+	) {
+		const isLog = labels.map((label) => label.startsWith('log_'));
+		const withoutLog = labels.map((label) =>
+			label.startsWith('log_') ? label.substring(4) : label
+		);
+		const labelIndices: number[] = withoutLog.map((label: string) => this.#getLabelIndex(label));
+		const weights = weightedLogisticRegression(
+			trainMatrix.map((v) =>
+				labelIndices.map((i: number, idx: number) => (isLog[idx] ? Math.log(v[i] + 1) : v[i]))
+			),
+			labelIndices.map(() => 0),
+			trainYs,
+			dataWeights,
+			steps
+		);
+		console.log(
+			labels,
+			'evaluate: log likelihood',
+			weightedLogLikelihood(
+				testMatrix.map((v) =>
+					labelIndices.map((i: number, idx: number) => (isLog[idx] ? Math.log(v[i] + 1) : v[i]))
+				),
+				weights,
+				testYs,
+				dataWeights
+			),
+			'weights: ',
+			weights
+		);
 	}
 
 	numPositiveExamples(): number {
@@ -380,6 +477,16 @@ export function weightedLogLikelihood(
 	return r;
 }
 
+function assertNoNan(a: number | number[] | number[][]) {
+	if (Array.isArray(a)) {
+		a.forEach(assertNoNan);
+	}
+	// @ts-ignore
+	else if (isNaN(a)) {
+		throw new Error(a);
+	}
+}
+
 // Weighted logistic regression: https://en.wikipedia.org/wiki/Logistic_regression#Weighted_least_squares
 // Like logistic regression with some changes: https://sharegpt.com/c/S0kp7lj
 // s -> s*dataWeights*dataWeights
@@ -391,6 +498,14 @@ export function weightedLogisticRegression(
 	itemWeights: number[] | undefined,
 	steps = 1
 ) {
+	if (x.length === 0) {
+		throw 'You need at least 1 example';
+	}
+	if (x[0].length != w.length) {
+		throw 'x0 length: ' + x[0].length + '=, w.length: ' + w.length;
+	}
+	assertNoNan(x);
+
 	if (!itemWeights) {
 		return logisticRegression(x, w, y, steps);
 	}
@@ -405,7 +520,12 @@ export function weightedLogisticRegression(
 		// console.time('iterateWeights');
 		// console.timeLog('iterateWeights', 'matrix size: ' + x.length + 'x' + x[0].length);
 		// console.timeLog('iterateWeights', 'compute mu');
-		const mu = matrixTimesVector(x, w).map(sigmoid);
+		assertNoNan(x);
+		assertNoNan(w);
+		const mu0 = matrixTimesVector(x, w);
+		assertNoNan(mu0);
+		const mu = mu0.map(sigmoid);
+		assertNoNan(mu);
 		// console.timeLog('iterateWeights', 'adjust mu');
 		// Make diagonal matrix invertible
 		for (let i = 0; i < mu.length; i++) {
@@ -417,12 +537,20 @@ export function weightedLogisticRegression(
 		// should itemWeights be squared?
 		// Maybe not, because item weights don't depend on item data, so it's derivative of constant multiplication.
 		const mu2 = mu.map((m, i) => m * (1 - m) * itemWeights[i]);
+		assertNoNan(mu2);
+
 		// console.timeLog('iterateWeights', 'compute transpose');
 		const xtranspose = transpose(x);
+		assertNoNan(xtranspose);
+
 		// console.timeLog('iterateWeights', 'compute hessian');
 		const hessian = matMul(matMulWithDiag(xtranspose, mu2), x);
+		assertNoNan(hessian);
+
 		// console.timeLog('iterateWeights', 'compute inverse');
 		const exp1 = matrixInverse(hessian);
+		assertNoNan(exp1);
+
 		if (!exp1) {
 			throw new Error(
 				'Could not invert matrix ' +

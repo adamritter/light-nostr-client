@@ -169,6 +169,12 @@ export function putUnder(
 		}
 		return;
 	}
+	if (!elementHTML) {
+		if (debugThreads) {
+			console.log('threads.ts putUnder: elementHTML is empty', eventId);
+		}
+		return;
+	}
 	const holderElement = createOrGetHolderElement(eventId, score, eventRedirects);
 	const element = htmlToElement(elementHTML);
 	if (debugThreads) {

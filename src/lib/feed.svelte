@@ -1,10 +1,12 @@
 <script lang="ts">
+	import { browser } from '$app/environment';
 	const USE_WORKER = false;
 
 	import { RelayPool, RelayPoolWorker } from 'nostr-relaypool';
 	import { onDestroy, onMount } from 'svelte';
 	import { newRelayPoolWorker, nsecDecode, subscribeToEvents, windowNostr } from './helpers';
 	import { getEventHash, signEvent, type Event, type UnsignedEvent } from 'nostr-tools';
+	import eventCache from '$lib/eventsCache.json';
 
 	export let publicKey: string;
 	export let loggedInUser: string | null = null;
@@ -49,9 +51,12 @@
 		const counters = { num_events: 0, num_event2s: 0 };
 		const redirectHolder = new Map();
 		if (USE_WORKER) {
-			relayPool = newRelayPoolWorker();
+			relayPool = newRelayPoolWorker(undefined, { logSubscriptions: true });
 		} else {
-			relayPool = new RelayPool();
+			relayPool = new RelayPool(undefined, { logSubscriptions: true, useEventCache: true });
+
+			// @ts-ignore
+			eventCache.forEach((e) => relayPool?.eventCache?.addEvent(e));
 		}
 		let cancelled = false;
 		cancel = () => {
@@ -81,6 +86,10 @@
 			'feed! onMount ' + publicKey + ' ' + viewAs + ' ' + document.getElementById('events')
 		);
 		resubscribe();
+		if (browser && window) {
+			// @ts-ignore
+			window.relayPool = relayPool;
+		}
 	});
 	onDestroy(() => {
 		console.log('feed onDestroy ' + publicKey);
