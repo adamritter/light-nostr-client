@@ -4,7 +4,7 @@
 
 	import { RelayPool, RelayPoolWorker } from 'nostr-relaypool';
 	import { onDestroy, onMount } from 'svelte';
-	import { newRelayPoolWorker, nsecDecode, subscribeToEvents, windowNostr } from './helpers';
+	import { newRelayPoolWorker, nsecDecode, subscribeToEvents, shuffle } from './helpers';
 	import { getEventHash, signEvent, type Event, type UnsignedEvent } from 'nostr-tools';
 	import eventCache from '$lib/eventsCache.json';
 
@@ -56,7 +56,7 @@
 			relayPool = new RelayPool(undefined, { logSubscriptions: true, useEventCache: true });
 
 			// @ts-ignore
-			eventCache.forEach((e) => relayPool?.eventCache?.addEvent(e));
+			// shuffle(eventCache).forEach((e) => relayPool?.eventCache?.addEvent(e));
 		}
 		let cancelled = false;
 		cancel = () => {

@@ -1,0 +1,55 @@
+- view as
+- load info from server for now, though moving to RelayPool would be better
+- reshares
+- log in
+- photos
+- publish note
+- ranking
+
+notes
+
+["wss://relay.damus.io","wss://nostr.mom","wss://nostr-pub.wellorder.net","wss://puravida.nostr.land","wss://eden.nostr.land","wss://nostr.inosta.cc","wss://relay.snort.social","wss://atlas.nostr.land"]
+
+{
+    "content": "FYI, My cashu mint is fully backed! please don't panic! a mint run is the last thing we need! STAY FUCKING CALM!!\n\n",
+    "created_at": 1678761587,
+    "id": "d28b62097941b8487f3604ca2746f121b16e476fa3bd854b18145da31d29ffda",
+    "kind": 1,
+    "pubkey": "c4b5369a9db27a2e1bc97b25faa4862d9fcfa747506b1f272f8f4b36b812dbd6",
+    "sig": "d0546260b5950edf379b565c816fe02c2233d1d0566501a59f55730f7c14f7845c3974d2a2eb1f5305118339231c937399fc1a1da9d72195a143e774352c1c2f",
+    "tags": [],
+    "meta": {
+      "revision": 0,
+      "created": 1678980417186,
+      "version": 0
+    },
+    "$loki": 2941
+  }
+
+
+  {
+    "content": "Who cares if it's not backed? Let's just hope that American taxpayers will save cashu together with Goldman Sachs",
+    "created_at": 1678764912,
+    "id": "bdf63c7a4f6f5817652fa7845b512f87e83d71a4b01a403c830fc8b3ffd7ab45",
+    "kind": 1,
+    "pubkey": "6e3f51664e19e082df5217fd4492bb96907405a0b27028671dd7f297b688608c",
+    "sig": "9f4b4d989518eef3727d49c56295d74550ab7e19eb3b7e49b6c2feeeba598a7895e78c967cc64516aca781c91fd2676dd6b0d7144bea30140dbe228404a0646c",
+    "tags": [
+      [
+        "e",
+        "d28b62097941b8487f3604ca2746f121b16e476fa3bd854b18145da31d29ffda",
+        "",
+        "root"
+      ],
+      [
+        "p",
+        "c4b5369a9db27a2e1bc97b25faa4862d9fcfa747506b1f272f8f4b36b812dbd6"
+      ]
+    ],
+    "meta": {
+      "revision": 0,
+      "created": 1678980410002,
+      "version": 0
+    },
+    "$loki": 1491
+  }

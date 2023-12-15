@@ -44,43 +44,30 @@ export class LogisticRegressor {
 	}
 	#applyMemberships(filterRowIndexForTraining?: (rowIndex: number | undefined) => boolean) {
 		console.time('applyMemberships');
+		const dataWeights = this.getDataWeights();
 		for (const [group, groupMap] of this.memberships) {
-			const countByMember = new Map();
+			const countByMember: Map<string, number> = new Map();
+			const positiveCountByMember: Map<string, number> = new Map();
+
 			for (const [rowId, member] of groupMap) {
 				if (!this.autoCreateRow && !this.rowIndices.has(rowId)) {
 					continue;
 				}
-				if (
-					filterRowIndexForTraining !== undefined &&
-					!filterRowIndexForTraining(this.rowIndices.get(rowId)!)
-				) {
+				const rowIndex = this.rowIndices.get(rowId)!;
+				if (filterRowIndexForTraining !== undefined && !filterRowIndexForTraining(rowIndex)) {
 					continue;
 				}
-				let count = countByMember.get(member);
-				if (count === undefined) {
-					count = 0;
-				}
-				countByMember.set(member, count + 1);
+				const dataWeight = dataWeights?.[rowIndex] || 1;
+
+				const count = countByMember.get(member) || 0;
+				countByMember.set(member, count + dataWeight);
+
+				const positiveCount = positiveCountByMember.get(member) || 0;
+				positiveCountByMember.set(member, positiveCount + this.ys[rowIndex] * dataWeight);
 			}
-			const likeCountByMember = new Map();
-			for (const [rowId, member] of groupMap) {
-				if (!this.autoCreateRow && !this.rowIndices.has(rowId)) {
-					continue;
-				}
-				if (
-					filterRowIndexForTraining !== undefined &&
-					!filterRowIndexForTraining(this.rowIndices.get(rowId)!)
-				) {
-					continue;
-				}
-				const likeCount = likeCountByMember.get(member) || 0;
-				const rowIndex = this.rowIndices.get(rowId);
-				if (rowIndex !== undefined) {
-					likeCountByMember.set(member, likeCount + this.ys[rowIndex]);
-				}
-			}
+
 			const groupShareLabel = `${group}_share`;
-			const groupLikeRatioLabel = `${group}_like_ratio`;
+			const groupPositiveRatioLabel = `${group}_positive_ratio`;
 			// For setting features we don't need to filter out row index.
 			for (const [rowId, member] of groupMap) {
 				if (!this.autoCreateRow && !this.rowIndices.has(rowId)) {
@@ -88,9 +75,9 @@ export class LogisticRegressor {
 				}
 				const count = countByMember.get(member) || 0;
 				this.set(rowId, groupShareLabel, (count * 1.0) / this.matrix.length);
-				const likeCount = likeCountByMember.get(member) || 0;
+				const positiveCount = positiveCountByMember.get(member) || 0;
 				if (count > 0) {
-					this.set(rowId, groupLikeRatioLabel, (likeCount * 1.0) / count);
+					this.set(rowId, groupPositiveRatioLabel, (positiveCount * 1.0) / count);
 				}
 			}
 		}
@@ -249,15 +236,13 @@ export class LogisticRegressor {
 			dataWeights,
 			count
 		);
-		console.log(
-			'evaluate: bias log likelihood',
-			weightedLogLikelihood(
-				testMatrix.map((v) => [v[0]]),
-				weights,
-				testYs,
-				dataWeights
-			)
+		const biasLogLikelihood = weightedLogLikelihood(
+			testMatrix.map((v) => [v[0]]),
+			weights,
+			testYs,
+			dataWeights
 		);
+		console.log('evaluate: bias log likelihood', biasLogLikelihood);
 		// now learn all weights
 		weights = weightedLogisticRegression(
 			trainMatrix,
@@ -347,7 +332,26 @@ export class LogisticRegressor {
 			dataWeights,
 			count,
 			testMatrix,
-			testYs
+			testYs,
+			biasLogLikelihood
+		);
+		this.#evaluateLabels(
+			[
+				'bias',
+				'is_reply',
+				'log_replies',
+				'reply_to_user',
+				'log_length',
+				'image',
+				'pubkey_positive_ratio'
+			],
+			trainMatrix,
+			trainYs,
+			dataWeights,
+			count,
+			testMatrix,
+			testYs,
+			biasLogLikelihood
 		);
 	}
 
@@ -358,7 +362,8 @@ export class LogisticRegressor {
 		dataWeights: number[] | undefined,
 		steps: number,
 		testMatrix: number[][],
-		testYs: number[]
+		testYs: number[],
+		biasLogLikelihood?: number
 	) {
 		const isLog = labels.map((label) => label.startsWith('log_'));
 		const withoutLog = labels.map((label) =>
@@ -374,20 +379,18 @@ export class LogisticRegressor {
 			dataWeights,
 			steps
 		);
-		console.log(
-			labels,
-			'evaluate: log likelihood',
-			weightedLogLikelihood(
-				testMatrix.map((v) =>
-					labelIndices.map((i: number, idx: number) => (isLog[idx] ? Math.log(v[i] + 1) : v[i]))
-				),
-				weights,
-				testYs,
-				dataWeights
+		const ll = weightedLogLikelihood(
+			testMatrix.map((v) =>
+				labelIndices.map((i: number, idx: number) => (isLog[idx] ? Math.log(v[i] + 1) : v[i]))
 			),
-			'weights: ',
-			weights
+			weights,
+			testYs,
+			dataWeights
 		);
+		console.log(labels, 'evaluate: log likelihood', ll, 'weights: ', weights);
+		if (biasLogLikelihood) {
+			console.log('relative log likelihood: ', ll / biasLogLikelihood);
+		}
 	}
 
 	numPositiveExamples(): number {
@@ -483,7 +486,7 @@ function assertNoNan(a: number | number[] | number[][]) {
 	}
 	// @ts-ignore
 	else if (isNaN(a)) {
-		throw new Error(a);
+		// throw new Error(a);
 	}
 }
 

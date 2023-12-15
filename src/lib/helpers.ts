@@ -283,7 +283,8 @@ export async function handleRepliedToOrRootEvent(
 	event2: Event,
 	start2: number,
 	index: number,
-	pageInfo: PageInfo
+	pageInfo: PageInfo,
+	positiveExample: boolean
 ) {
 	if (pageInfo.handledEvents.has(event2.id)) {
 		return;
@@ -323,7 +324,8 @@ export async function handleRepliedToOrRootEvent(
 			event2,
 			pageInfo.loggedInUser,
 			pageInfo.logisticRegressor,
-			pageInfo.signEvent
+			pageInfo.signEvent,
+			positiveExample
 		);
 	} else {
 		setTimeout(() => {
@@ -332,7 +334,8 @@ export async function handleRepliedToOrRootEvent(
 				event2,
 				pageInfo.loggedInUser,
 				pageInfo.logisticRegressor,
-				pageInfo.signEvent
+				pageInfo.signEvent,
+				positiveExample
 			);
 		}, showLikesAndCommentsAfterMs);
 	}
@@ -346,9 +349,11 @@ export async function handleRepliedToOrRootEvent(
 					event3,
 					pageInfo.logisticRegressor,
 					pageInfo.loggedInUser,
-					event2
+					event2,
+					true,
+					positiveExample
 				);
-				handleRepliedToOrRootEvent(event, event3, start2, index, pageInfo);
+				handleRepliedToOrRootEvent(event, event3, start2, index, pageInfo, positiveExample);
 			},
 			MAX_DELAY_MS_REFERENCE,
 			undefined,
@@ -383,7 +388,8 @@ function showLikes(
 	event: Event,
 	loggedInUser: string | null,
 	logisticRegressor: LogisticRegressor,
-	signEvent?: (event: UnsignedEvent) => Promise<Event>
+	signEvent: ((event: UnsignedEvent) => Promise<Event>) | undefined,
+	positiveExample: boolean
 ) {
 	if (!shouldShowLikes) {
 		return;
@@ -420,7 +426,14 @@ function showLikes(
 		[{ '#e': [event.id], kinds: [7], limit: 100 }],
 		DEFAULT_RELAYS,
 		(reactionEvent: Event) => {
-			processEventForLogisticRegression(reactionEvent, logisticRegressor, loggedInUser, event);
+			processEventForLogisticRegression(
+				reactionEvent,
+				logisticRegressor,
+				loggedInUser,
+				event,
+				true,
+				positiveExample
+			);
 			let reaction = reactionEvent.content;
 			if (
 				reaction == '👍' ||
@@ -473,7 +486,8 @@ function showComments(
 	event: Event,
 	eventRedirects: Map<string, string>,
 	loggedInUser: string | null,
-	logisticRegressor: LogisticRegressor
+	logisticRegressor: LogisticRegressor,
+	positiveExample: boolean
 ) {
 	if (!shouldShowComments) {
 		return;
@@ -498,7 +512,8 @@ function showComments(
 				logisticRegressor,
 				loggedInUser,
 				event,
-				false
+				false,
+				positiveExample
 			);
 			addEventRedirect(event.id, reactionEvent.id, eventRedirects);
 			redirectReferencedEvents(reactionEvent, eventRedirects);
@@ -536,7 +551,12 @@ async function showNote(
 	putUnder(event.id, -event.created_at, noteHtml, eventRedirects);
 }
 
-export async function subscribeCallback(event: any, pageInfo: PageInfo, index: number) {
+export async function subscribeCallback(
+	event: any,
+	pageInfo: PageInfo,
+	index: number,
+	positiveExample: boolean
+) {
 	if (pageInfo.handledEvents.has(event.id)) {
 		return;
 	}
@@ -579,7 +599,9 @@ export async function subscribeCallback(event: any, pageInfo: PageInfo, index: n
 				event2,
 				pageInfo.logisticRegressor,
 				pageInfo.loggedInUser,
-				event2
+				event2,
+				true,
+				positiveExample
 			);
 			if (debugHelpers) {
 				console.log(
@@ -589,7 +611,7 @@ export async function subscribeCallback(event: any, pageInfo: PageInfo, index: n
 					JSON.stringify(event2.tags)
 				);
 			}
-			handleRepliedToOrRootEvent(event, event2, start2, index, pageInfo);
+			handleRepliedToOrRootEvent(event, event2, start2, index, pageInfo, positiveExample);
 		},
 		MAX_DELAY_MS_REFERENCE,
 		undefined,
@@ -601,14 +623,16 @@ export async function subscribeCallback(event: any, pageInfo: PageInfo, index: n
 			event,
 			pageInfo.loggedInUser,
 			pageInfo.logisticRegressor,
-			pageInfo.signEvent
+			pageInfo.signEvent,
+			positiveExample
 		);
 		showComments(
 			pageInfo.relayPool,
 			event,
 			pageInfo.eventRedirects,
 			pageInfo.loggedInUser,
-			pageInfo.logisticRegressor
+			pageInfo.logisticRegressor,
+			positiveExample
 		);
 	} else {
 		setTimeout(() => {
@@ -617,14 +641,16 @@ export async function subscribeCallback(event: any, pageInfo: PageInfo, index: n
 				event,
 				pageInfo.loggedInUser,
 				pageInfo.logisticRegressor,
-				pageInfo.signEvent
+				pageInfo.signEvent,
+				positiveExample
 			);
 			showComments(
 				pageInfo.relayPool,
 				event,
 				pageInfo.eventRedirects,
 				pageInfo.loggedInUser,
-				pageInfo.logisticRegressor
+				pageInfo.logisticRegressor,
+				positiveExample
 			);
 		}, showLikesAndCommentsAfterMs);
 	}
@@ -644,7 +670,7 @@ type PageInfo = {
 	handledEvents: Set<string>;
 };
 
-const fetchPositiveExamples = true;
+const fetchPositiveExamples = false;
 
 export async function subscribeToEvents(
 	relayPool: RelayPool | RelayPoolWorker,
@@ -655,7 +681,7 @@ export async function subscribeToEvents(
 	cancelled: () => boolean,
 	viewAs: boolean,
 	loggedInUser: string | null,
-	signEvent?: (event: UnsignedEvent) => Promise<Event>
+	signEvent: ((event: UnsignedEvent) => Promise<Event>) | undefined
 ) {
 	const logisticRegressor = new LogisticRegressor();
 	const pageInfo: PageInfo = {
@@ -694,9 +720,16 @@ export async function subscribeToEvents(
 		[{ authors, kinds: [1], limit: thisMainEventCount }],
 		undefined,
 		(event: Event) => {
-			processEventForLogisticRegression(event, logisticRegressor, loggedInUser);
+			processEventForLogisticRegression(
+				event,
+				logisticRegressor,
+				loggedInUser,
+				undefined,
+				true,
+				false
+			);
 			index++;
-			subscribeCallback(event, pageInfo, index);
+			subscribeCallback(event, pageInfo, index, false);
 		},
 		undefined,
 		undefined,
@@ -721,7 +754,7 @@ export async function subscribeToEvents(
 							true,
 							true
 						);
-						subscribeCallback(likedNote, pageInfo, index);
+						subscribeCallback(likedNote, pageInfo, index, true);
 					},
 					MAX_DELAY_MS_REFERENCE,
 					undefined,
@@ -769,4 +802,21 @@ export function nsecDecode(nsec: string): string | undefined {
 			return decoded.data as string;
 		}
 	}
+}
+
+export function shuffle(array: any[]): any[] {
+	let currentIndex = array.length,
+		randomIndex;
+
+	// While there remain elements to shuffle.
+	while (currentIndex != 0) {
+		// Pick a remaining element.
+		randomIndex = Math.floor(Math.random() * currentIndex);
+		currentIndex--;
+
+		// And swap it with the current element.
+		[array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
+	}
+
+	return array;
 }
